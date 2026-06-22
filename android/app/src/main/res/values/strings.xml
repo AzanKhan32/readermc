@@ -1,7 +1,7 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">ReaderMC</string>
-    <string name="title_activity_main">ReaderMC</string>
-    <string name="package_name">com.azan.readermc</string>
-    <string name="custom_url_scheme">com.azan.readermc</string>
-</resources>
+<?xml version='1.0' encoding='utf-8'?> 
+<resources> 
+    <string name="app_name">Manga Reader</string> 
+    <string name="title_activity_main">Manga Reader</string> 
+    <string name="package_name">com.azan.readermc</string> 
+    <string name="custom_url_scheme">com.azan.readermc</string> 
+</resources> 
