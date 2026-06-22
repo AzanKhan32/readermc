@@ -2120,15 +2120,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const keepIds = new Set(files.map((file) => getChapterId(file, collectionId)));
     const progress = state.chapterProgress || {};
     const scrolls = state.chapterScrolls || {};
-    let progressChanged = false;
-    let scrollChanged = false;
+    let changed = false;
 
     const nextProgress = { ...progress };
     for (const chapterId of Object.keys(nextProgress)) {
       if (!chapterId.startsWith(`${collectionId}::`)) continue;
       if (keepIds.has(chapterId)) continue;
       delete nextProgress[chapterId];
-      progressChanged = true;
+      changed = true;
     }
 
     const nextScrolls = { ...scrolls };
@@ -2136,13 +2135,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (!chapterId.startsWith(`${collectionId}::`)) continue;
       if (keepIds.has(chapterId)) continue;
       delete nextScrolls[chapterId];
-      scrollChanged = true;
+      changed = true;
     }
 
-    if (progressChanged || scrollChanged) {
+    if (changed) {
       writeState({
-        ...(progressChanged ? { chapterProgress: nextProgress } : {}),
-        ...(scrollChanged ? { chapterScrolls: nextScrolls } : {})
+        chapterProgress: nextProgress,
+        chapterScrolls: nextScrolls
       });
     }
   }
@@ -2161,17 +2160,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const state = readState();
     const nextProgress = { ...(state.chapterProgress || {}) };
     const nextScrolls = { ...(state.chapterScrolls || {}) };
-    const hadProgress = Object.prototype.hasOwnProperty.call(nextProgress, chapterId);
-    const hadScroll = Object.prototype.hasOwnProperty.call(nextScrolls, chapterId);
-
-    if (!hadProgress && !hadScroll) return;
 
     delete nextProgress[chapterId];
     delete nextScrolls[chapterId];
 
     writeState({
-      ...(hadProgress ? { chapterProgress: nextProgress } : {}),
-      ...(hadScroll ? { chapterScrolls: nextScrolls } : {})
+      chapterProgress: nextProgress,
+      chapterScrolls: nextScrolls
     });
   }
 
@@ -2241,6 +2236,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   function saveCurrentPosition() {
+    if (progressSaveSuspended) return;
     if (currentChapterIndex < 0 || chapters.length === 0) return;
     const currentFile = chapters[currentChapterIndex];
     const chapterId = getChapterId(currentFile);
@@ -3125,8 +3121,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const currentChapterKey = currentChapterIndex >= 0 ? getChapterLookupKey(chapters[currentChapterIndex]) : null;
     const wasCurrentChapter = currentChapterIndex === index;
 
+    // Cancel any queued saves so they don't resurrect deleted state
+    if (progressSaveTimer) { clearTimeout(progressSaveTimer); progressSaveTimer = null; }
+    if (positionSaveTimer) { clearTimeout(positionSaveTimer); positionSaveTimer = null; }
     progressSaveSuspended = true;
-    saveCurrentPosition();
+    if (!wasCurrentChapter) saveCurrentPosition();
     activeCollection.files.splice(index, 1);
     activeCollection.lastChapterIndex = Math.min(activeCollection.lastChapterIndex || 0, Math.max(0, activeCollection.files.length - 1));
     pruneMissingChapterState(activeCollection.id, activeCollection.files);

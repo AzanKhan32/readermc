@@ -1,6 +1,6 @@
 {
   "appId": "com.azan.readermc",
-  "appName": "ReaderMC",
+  "appName": "Manga Reader",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
