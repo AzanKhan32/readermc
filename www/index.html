@@ -1807,8 +1807,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (collectionName) collectionName.textContent = label;
     if (collectionNamePill) {
       collectionNamePill.title = collections.length > 1
-        ? `Switch collection (${collections.length} available) — tap to rename`
-        : 'Tap to rename collection';
+        ? `Switch collection (${collections.length} available)`
+        : 'Collection';
       collectionNamePill.setAttribute('aria-expanded', collectionMenu && !collectionMenu.classList.contains('hidden') ? 'true' : 'false');
     }
   }
@@ -1860,6 +1860,45 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
   }
 
+  function startRenameCollectionInMenu(index, titleEl) {
+    const collection = collections[index];
+    if (!collection || !titleEl) return;
+
+    const currentName = collection.name;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.style.cssText = `
+      width: 100%; background: transparent; border: none;
+      outline: 2px solid var(--reader-accent); outline-offset: 2px; border-radius: 4px;
+      color: inherit; font-family: Georgia,'Times New Roman',serif;
+      font-weight: 700; font-size: inherit; padding: 0 4px;
+    `;
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const finish = () => {
+      const newName = input.value.trim() || currentName;
+      collection.name = newName;
+      if (newName !== currentName) collection.userRenamed = true;
+      const newTitle = document.createElement('div');
+      newTitle.className = 'collection-menu-item-title';
+      newTitle.textContent = newName;
+      input.replaceWith(newTitle);
+      if (index === activeCollectionIndex) updateCollectionLabel();
+    };
+
+    input.addEventListener('blur', finish);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = currentName; input.blur(); }
+      e.stopPropagation();
+    });
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('pointerdown', (e) => e.stopPropagation());
+  }
+
   function renderCollectionMenu() {
     if (!collectionMenuList || !collectionMenuCount) return;
 
@@ -1885,17 +1924,41 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const [accent, accentSoft] = getCollectionAccent(index);
       item.style.setProperty('--collection-accent', accent);
       item.style.setProperty('--collection-accent-soft', accentSoft);
-      item.innerHTML = `
-        <div class="collection-menu-item-title">${collection.name}</div>
-        <div class="collection-menu-item-meta">
-          <span>${collection.files.length} chapter${collection.files.length === 1 ? '' : 's'}</span>
-          <span>${collection.sourceType === 'folder' ? 'Folder import' : 'File import'}</span>
-        </div>
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'collection-menu-item-title';
+      titleEl.textContent = collection.name;
+
+      const metaEl = document.createElement('div');
+      metaEl.className = 'collection-menu-item-meta';
+      metaEl.innerHTML = `
+        <span>${collection.files.length} chapter${collection.files.length === 1 ? '' : 's'}</span>
+        <span>${collection.sourceType === 'folder' ? 'Folder import' : 'File import'}</span>
+        <span style="margin-left:auto;opacity:0.5;font-size:0.72rem">Hold to rename</span>
       `;
+
+      item.appendChild(titleEl);
+      item.appendChild(metaEl);
+
+      // Short tap = switch collection
       item.addEventListener('click', () => {
+        if (item.querySelector('input')) return; // rename in progress
         hideCollectionMenu();
         setActiveCollection(index, { showList: true });
       });
+
+      // Long press = rename
+      let lpTimer = null;
+      item.addEventListener('pointerdown', () => {
+        lpTimer = setTimeout(() => {
+          lpTimer = null;
+          startRenameCollectionInMenu(index, titleEl);
+        }, 600);
+      });
+      item.addEventListener('pointerup', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+      item.addEventListener('pointercancel', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+      item.addEventListener('pointermove', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+
       collectionMenuList.appendChild(item);
     });
   }
@@ -2037,9 +2100,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     const collection = collections[collectionIndex];
     collection.files = files;
-    collection.name = collection.sourceType === 'folder'
-      ? (getFolderName(files[0]) || collection.name)
-      : collection.name;
+    // Only auto-update name if user hasn't manually renamed it
+    if (!collection.userRenamed) {
+      collection.name = collection.sourceType === 'folder'
+        ? (getFolderName(files[0]) || collection.name)
+        : collection.name;
+    }
     collection.sourceKey = collection.sourceType === 'folder'
       ? (getFolderName(files[0]) || collection.sourceKey || collection.name).toLowerCase()
       : collection.sourceKey;
@@ -2687,26 +2753,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   if (collectionNamePill) {
-    let renameLongPressTimer = null;
-    collectionNamePill.addEventListener('pointerdown', () => {
-      renameLongPressTimer = setTimeout(() => {
-        renameLongPressTimer = null;
-        startRenameCollection();
-      }, 600);
-    });
-    collectionNamePill.addEventListener('pointerup', () => {
-      if (renameLongPressTimer) clearTimeout(renameLongPressTimer);
-    });
-    collectionNamePill.addEventListener('pointercancel', () => {
-      if (renameLongPressTimer) clearTimeout(renameLongPressTimer);
-    });
     collectionNamePill.addEventListener('click', (event) => {
       event.stopPropagation();
-      if (renameLongPressTimer === null) return; // was a long press, already handled
-      if (collections.length <= 1 && activeCollectionIndex >= 0) {
-        startRenameCollection();
-        return;
-      }
       toggleCollectionMenu();
     });
   }
@@ -3387,50 +3435,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 
 
-
-  function startRenameCollection() {
-    const activeCollection = getActiveCollection();
-    if (!activeCollection || !collectionNamePill) return;
-
-    const currentName = activeCollection.name;
-    const span = collectionNamePill.querySelector('span');
-    const chevron = collectionNamePill.querySelector('svg');
-    if (!span) return;
-
-    // Hide chevron, replace span with input
-    if (chevron) chevron.style.display = 'none';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentName;
-    input.style.cssText = `
-      flex: 1; min-width: 0; background: transparent; border: none; outline: none;
-      color: var(--welcome-heading); font-family: Georgia,'Times New Roman',serif;
-      font-weight: 700; font-size: 1.25rem; text-align: center; width: 100%;
-    `;
-    span.replaceWith(input);
-    input.select();
-
-    const finishRename = () => {
-      const newName = input.value.trim();
-      const finalName = newName || currentName;
-      if (finalName !== currentName) {
-        activeCollection.name = finalName;
-        renderCollectionMenu();
-      }
-      const newSpan = document.createElement('span');
-      newSpan.textContent = finalName;
-      input.replaceWith(newSpan);
-      if (chevron) chevron.style.display = '';
-      updateCollectionLabel();
-    };
-
-    input.addEventListener('blur', finishRename);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-      if (e.key === 'Escape') { input.value = currentName; input.blur(); }
-      e.stopPropagation();
-    });
-  }
 
   // Initial UI update
   showWelcomeView();
