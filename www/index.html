@@ -2507,28 +2507,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     capacitorFileInput.accept = '.cbz,application/zip,application/x-cbz,*/*';
     capacitorFileInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
     document.body.appendChild(capacitorFileInput);
-    capacitorFileInput.addEventListener('click', () => {
-    alert('INPUT CLICKED');
-    });
-
-    capacitorFileInput.addEventListener('change', () => {
-      alert('FILES SELECTED');
-    });
-
     capacitorFileInput.addEventListener('change', async (e) => {
-      const fileList = e.target.files;
+      // Convert to Array BEFORE clearing — Android WebView can invalidate
+      // the FileList reference after e.target.value is reset
+      const allFiles = Array.from(e.target.files || []).filter(f => /\.cbz$/i.test(f.name));
       e.target.value = '';
-      if (!fileList || fileList.length === 0) return;
 
-      showUploadProgress('Loading chapters…');
-      const allFiles = Array.from(fileList).filter(f => /\.cbz$/i.test(f.name));
-      const total = allFiles.length;
-
-      if (total === 0) {
-        hideUploadProgress();
+      if (allFiles.length === 0) {
         showToast('No CBZ files found', 'error');
         return;
       }
+
+      showUploadProgress('Loading chapters…');
+      const total = allFiles.length;
 
       updateUploadProgress(50, `Loading ${total} chapter${total === 1 ? '' : 's'}…`);
       await new Promise(r => setTimeout(r, 80));
@@ -2542,15 +2533,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   async function addCollectionFromFolder() {
     if (isCapacitor && capacitorFileInput) {
-  alert("Capacitor picker branch reached");
-  capacitorFileInput.click();
-
-  setTimeout(() => {
-    alert("After click()");
-  }, 1000);
-
-  return;
-}
+      capacitorFileInput.click();
+      return;
+    }
 
     if (typeof window.showDirectoryPicker === 'function') {
       try {
@@ -3322,29 +3307,3 @@ updateGap();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
