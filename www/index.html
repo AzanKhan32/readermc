@@ -2538,9 +2538,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
     hideCollectionMenu();
     renderCollectionMenu();
+    saveCapacitorCollections();
   }
-
-  folderInput.addEventListener('change', async (e) => {
     const fileList = e.target.files;
     e.target.value = '';
     if (!fileList || fileList.length === 0) return;
@@ -2615,45 +2614,149 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   // Detect if running inside Capacitor (Android app)
   const isCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
-  // Hidden file input for Capacitor — reliable on Android WebView
-  let capacitorFileInput = null;
-  if (isCapacitor) {
-    capacitorFileInput = document.createElement('input');
-    capacitorFileInput.type = 'file';
-    capacitorFileInput.multiple = true;
-    capacitorFileInput.accept = '.cbz,application/zip,application/x-cbz,*/*';
-    capacitorFileInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-    document.body.appendChild(capacitorFileInput);
-    capacitorFileInput.addEventListener('change', async (e) => {
-      // Convert to Array BEFORE clearing — Android WebView can invalidate
-      // the FileList reference after e.target.value is reset
-      const allFiles = Array.from(e.target.files || []).filter(f => /\.cbz$/i.test(f.name));
-      e.target.value = '';
+  // ── Capacitor FilePicker persistence ────────────────────────────────────
+  // Saves collection file paths to localStorage so they survive app restarts.
+  // On next launch, files are re-read from disk via FilePicker.readFile().
 
-      if (allFiles.length === 0) {
-        showToast('No CBZ files found', 'error');
-        return;
+  const CAPACITOR_COLLECTIONS_KEY = 'readermc:capacitorCollections:v1';
+
+  function saveCapacitorCollections() {
+    if (!isCapacitor) return;
+    try {
+      const serialisable = collections.map(col => ({
+        id: col.id,
+        name: col.name,
+        sourceKey: col.sourceKey,
+        lastChapterIndex: col.lastChapterIndex || 0,
+        files: col.files.map(f => ({ name: f.name, path: f.__capacitorPath || null }))
+      })).filter(col => col.files.some(f => f.path));
+      localStorage.setItem(CAPACITOR_COLLECTIONS_KEY, JSON.stringify(serialisable));
+    } catch { /* ignore */ }
+  }
+
+  async function restoreCapacitorCollections() {
+    if (!isCapacitor) return false;
+    let saved;
+    try {
+      saved = JSON.parse(localStorage.getItem(CAPACITOR_COLLECTIONS_KEY) || 'null');
+    } catch { return false; }
+    if (!saved || !saved.length) return false;
+
+    const { FilePicker } = window.Capacitor.Plugins;
+    if (!FilePicker) return false;
+
+    showUploadProgress('Restoring your collections…');
+    let restoredCount = 0;
+
+    for (const savedCol of saved) {
+      const fileObjects = [];
+      for (const savedFile of savedCol.files) {
+        if (!savedFile.path) continue;
+        try {
+          const result = await FilePicker.readFile({ path: savedFile.path });
+          if (!result?.data) continue;
+          const byteString = atob(result.data);
+          const bytes = new Uint8Array(byteString.length);
+          for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
+          const blob = new Blob([bytes], { type: 'application/zip' });
+          const file = new File([blob], savedFile.name, { type: 'application/zip' });
+          file.__capacitorPath = savedFile.path;
+          fileObjects.push(file);
+        } catch { /* file moved/deleted — skip */ }
       }
 
-      showUploadProgress('Loading chapters…');
-      const total = allFiles.length;
+      if (fileObjects.length === 0) continue;
 
-      updateUploadProgress(50, `Loading ${total} chapter${total === 1 ? '' : 's'}…`);
-      await new Promise(r => setTimeout(r, 80));
-      updateUploadProgress(100, `Ready — ${total} chapter${total === 1 ? '' : 's'}`);
-      await new Promise(r => setTimeout(r, 300));
+      fileObjects.sort(naturalSort);
+      collections.push({
+        id: savedCol.id,
+        name: savedCol.name,
+        sourceType: 'files',
+        sourceKey: savedCol.sourceKey,
+        directoryHandle: null,
+        files: fileObjects,
+        lastChapterIndex: savedCol.lastChapterIndex || 0
+      });
+      restoredCount++;
+    }
+
+    hideUploadProgress();
+    if (restoredCount === 0) return false;
+
+    setActiveCollection(0, { showList: true });
+    showCollectionView();
+    showToast(`Restored ${restoredCount} collection${restoredCount === 1 ? '' : 's'}`, 'success');
+    return true;
+  }
+
+  // ── Capacitor FilePicker — pick new files ────────────────────────────────
+
+  async function capacitorPickAndImport() {
+    const { FilePicker } = window.Capacitor.Plugins;
+    if (!FilePicker) {
+      showToast('FilePicker plugin not available', 'error');
+      return;
+    }
+
+    let result;
+    try {
+      result = await FilePicker.pickFiles({
+        types: ['application/zip', 'application/x-cbz'],
+        multiple: true,
+        readData: true
+      });
+    } catch (err) {
+      if (err?.message?.toLowerCase().includes('cancel')) return;
+      showToast('Could not open file picker', 'error');
+      return;
+    }
+
+    const picked = (result?.files || []).filter(f => /\.cbz$/i.test(f.name));
+    if (picked.length === 0) {
+      showToast('No CBZ files found', 'error');
+      return;
+    }
+
+    showUploadProgress('Loading chapters…');
+    updateUploadProgress(20, `Reading ${picked.length} file${picked.length === 1 ? '' : 's'}…`);
+
+    const fileObjects = [];
+    for (const pf of picked) {
+      try {
+        const byteString = atob(pf.data);
+        const bytes = new Uint8Array(byteString.length);
+        for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/zip' });
+        const file = new File([blob], pf.name, { type: 'application/zip' });
+        file.__capacitorPath = pf.path || null;
+        fileObjects.push(file);
+      } catch { /* skip unreadable */ }
+    }
+
+    if (fileObjects.length === 0) {
       hideUploadProgress();
+      showToast('Could not read selected files', 'error');
+      return;
+    }
 
-      const capacitorName = allFiles.length === 1
-        ? allFiles[0].name.replace(/\.cbz$/i, '').trim()
-        : (allFiles[0].name.replace(/\.cbz$/i, '').replace(/[\s_-]*\d+(\.\d+)?\s*$/, '').trim() || 'My Manhwa');
-      await handleSelectedFiles(allFiles, { sourceType: 'files', name: capacitorName });
-    });
+    const total = fileObjects.length;
+    updateUploadProgress(70, `Loading ${total} chapter${total === 1 ? '' : 's'}…`);
+    await new Promise(r => setTimeout(r, 80));
+    updateUploadProgress(100, `Ready — ${total} chapter${total === 1 ? '' : 's'}`);
+    await new Promise(r => setTimeout(r, 300));
+    hideUploadProgress();
+
+    const capacitorName = fileObjects.length === 1
+      ? fileObjects[0].name.replace(/\.cbz$/i, '').trim()
+      : (fileObjects[0].name.replace(/\.cbz$/i, '').replace(/[\s_-]*\d+(\.\d+)?\s*$/, '').trim() || 'My Manhwa');
+
+    await handleSelectedFiles(fileObjects, { sourceType: 'files', name: capacitorName });
+    saveCapacitorCollections();
   }
 
   async function addCollectionFromFolder() {
-    if (isCapacitor && capacitorFileInput) {
-      capacitorFileInput.click();
+    if (isCapacitor) {
+      await capacitorPickAndImport();
       return;
     }
 
@@ -3201,6 +3304,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     updateReadingHud();
     progressSaveSuspended = false;
     showToast(deleteSuccessMessage, 'success');
+    saveCapacitorCollections();
   }
 
   // Load and render selected chapter
@@ -3448,9 +3552,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 
 
-  // Initial UI update
-  showWelcomeView();
-  updateUI();
+  // Initial UI — on Capacitor try to restore persisted collections first
+  (async () => {
+    const restored = await restoreCapacitorCollections();
+    if (!restored) showWelcomeView();
+    updateUI();
+  })();
 </script>
 <script>
 let pageGap = 0;
