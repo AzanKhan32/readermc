@@ -2495,7 +2495,56 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
   }
 
+  // Detect if running inside Capacitor (Android app)
+  const isCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+  // Hidden file input for Capacitor — reliable on Android WebView
+  let capacitorFileInput = null;
+  if (isCapacitor) {
+    capacitorFileInput = document.createElement('input');
+    capacitorFileInput.type = 'file';
+    capacitorFileInput.multiple = true;
+    capacitorFileInput.accept = '.cbz,application/zip,application/x-cbz,*/*';
+    capacitorFileInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+    document.body.appendChild(capacitorFileInput);
+
+    capacitorFileInput.addEventListener('change', async (e) => {
+      const fileList = e.target.files;
+      e.target.value = '';
+      if (!fileList || fileList.length === 0) return;
+
+      showUploadProgress('Loading chapters…');
+      const allFiles = Array.from(fileList).filter(f => /\.cbz$/i.test(f.name));
+      const total = allFiles.length;
+
+      if (total === 0) {
+        hideUploadProgress();
+        showToast('No CBZ files found', 'error');
+        return;
+      }
+
+      updateUploadProgress(50, `Loading ${total} chapter${total === 1 ? '' : 's'}…`);
+      await new Promise(r => setTimeout(r, 80));
+      updateUploadProgress(100, `Ready — ${total} chapter${total === 1 ? '' : 's'}`);
+      await new Promise(r => setTimeout(r, 300));
+      hideUploadProgress();
+
+      await handleSelectedFiles(allFiles, { sourceType: 'files', name: 'My Manhwa' });
+    });
+  }
+
   async function addCollectionFromFolder() {
+    if (isCapacitor && capacitorFileInput) {
+  alert("Capacitor picker branch reached");
+  capacitorFileInput.click();
+
+  setTimeout(() => {
+    alert("After click()");
+  }, 1000);
+
+  return;
+}
+
     if (typeof window.showDirectoryPicker === 'function') {
       try {
         const directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
