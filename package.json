@@ -1,0 +1,19 @@
+{
+  "name": "readermc",
+  "version": "1.0.0",
+  "description": "ReaderMC - Manhwa CBZ Reader",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx cap sync android"
+  },
+  "keywords": [],
+  "author": "AzanKhan32",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  }
+}

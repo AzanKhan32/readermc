@@ -1,0 +1,11 @@
+{
+  "appId": "com.azan.readermc",
+  "appName": "ReaderMC",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
