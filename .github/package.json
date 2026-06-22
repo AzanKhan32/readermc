@@ -10,12 +10,12 @@
   "author": "AzanKhan32",
   "license": "ISC",
   "dependencies": {
-    "@capacitor/android": "^8.4.1",
-    "@capacitor/core": "^8.4.1",
-    "@capacitor/filesystem": "^8.1.2",
-    "@capawesome/capacitor-file-picker": "^8.0.2"
+    "@capacitor/android": "latest",
+    "@capacitor/core": "latest",
+    "@capacitor/filesystem": "latest",
+    "@capawesome/capacitor-file-picker": "latest"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.4.1"
+    "@capacitor/cli": "^6.0.0"
   }
 }
