@@ -1020,7 +1020,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     border-radius: 1.15rem;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s ease;
   }
 
   .chapter-card-delete-bg svg {
@@ -2927,7 +2926,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       // Swipe-to-delete logic (swipe right)
       let swipeX0 = 0, swipeY0 = 0, swipeDx = 0, swipingCard = false, swipeLocked = false;
-      const SWIPE_THRESHOLD = 90;
+      const SWIPE_THRESHOLD = 72;
 
       card.addEventListener('touchstart', (e) => {
         if (e.touches.length !== 1) return;
@@ -2937,6 +2936,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         swipingCard = false;
         swipeLocked = false;
         card.style.transition = 'none';
+        deleteBg.style.transition = 'none';
+        deleteBg.style.opacity = '0';
       }, { passive: true });
 
       card.addEventListener('touchmove', (e) => {
@@ -2945,32 +2946,42 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         const dy = e.touches[0].clientY - swipeY0;
         if (!swipingCard) {
           if (Math.abs(dy) > Math.abs(dx) + 5) { swipeLocked = true; return; }
-          if (Math.abs(dx) > 8) swipingCard = true;
+          if (Math.abs(dx) > 6) swipingCard = true;
         }
         if (!swipingCard) return;
-        swipeDx = Math.max(0, dx); // only allow right swipe
+        swipeDx = Math.max(0, dx);
         card.style.transform = `translateX(${swipeDx}px)`;
-        wrapper.classList.toggle('swiping', swipeDx > 20);
+        // Show delete bg immediately as soon as card moves, opacity scales with drag
+        const revealRatio = Math.min(1, swipeDx / SWIPE_THRESHOLD);
+        deleteBg.style.opacity = String(revealRatio);
       }, { passive: true });
 
       card.addEventListener('touchend', async () => {
         card.style.transition = '';
+        deleteBg.style.transition = '';
         if (swipeDx >= SWIPE_THRESHOLD) {
-          // Animate out then delete
-          card.classList.add('swipe-out');
+          // Lock saves immediately so nothing writes between now and delete
+          if (progressSaveTimer) { clearTimeout(progressSaveTimer); progressSaveTimer = null; }
+          if (positionSaveTimer) { clearTimeout(positionSaveTimer); positionSaveTimer = null; }
+          progressSaveSuspended = true;
+          // Snap out immediately then delete
+          card.style.transition = 'transform 0.18s ease';
+          card.style.transform = 'translateX(110%)';
           wrapper.style.maxHeight = wrapper.offsetHeight + 'px';
           wrapper.style.overflow = 'hidden';
           setTimeout(() => {
-            wrapper.classList.add('collapsing');
+            wrapper.style.transition = 'max-height 0.18s ease, opacity 0.18s ease, margin-bottom 0.18s ease';
             wrapper.style.maxHeight = '0';
             wrapper.style.marginBottom = '0';
             wrapper.style.opacity = '0';
-          }, 260);
+          }, 160);
           setTimeout(() => {
             deleteChapterFromList(index);
-          }, 500);
+          }, 320);
         } else {
+          card.style.transition = 'transform 0.18s ease';
           card.style.transform = '';
+          deleteBg.style.opacity = '0';
           wrapper.classList.remove('swiping');
         }
         swipingCard = false;
