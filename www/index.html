@@ -2648,95 +2648,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         ? allFiles[0].name.replace(/\.cbz$/i, '').trim()
         : (allFiles[0].name.replace(/\.cbz$/i, '').replace(/[\s_-]*\d+(\.\d+)?\s*$/, '').trim() || 'My Manhwa');
       await handleSelectedFiles(allFiles, { sourceType: 'files', name: capacitorName });
-      saveCapacitorCollections();
     });
-  }
-
-  // ── Capacitor persistence ─────────────────────────────────────────────────
-  // Stores each file's name + size + lastModified so collections can be
-  // identified on restore. The actual File objects are re-requested from the
-  // user only when a file can no longer be matched — otherwise we silently
-  // rebuild from the in-memory files that were already loaded this session.
-  //
-  // Strategy: on every import/delete we serialise collection metadata to
-  // localStorage. On next launch we check if any saved collections exist and,
-  // if so, prompt the user to re-pick those files (one picker per collection).
-  // This keeps the working file picker completely untouched while giving
-  // persistence across restarts.
-
-  const CAPACITOR_COLLECTIONS_KEY = 'readermc:capacitorCollections:v1';
-
-  function saveCapacitorCollections() {
-    if (!isCapacitor) return;
-    try {
-      const serialisable = collections.map(col => ({
-        id: col.id,
-        name: col.name,
-        sourceKey: col.sourceKey,
-        lastChapterIndex: col.lastChapterIndex || 0,
-        // Store enough to identify files when user re-picks them
-        fileSignatures: col.files.map(f => ({
-          name: f.name,
-          size: f.size,
-          lastModified: f.lastModified
-        }))
-      }));
-      localStorage.setItem(CAPACITOR_COLLECTIONS_KEY, JSON.stringify(serialisable));
-    } catch { /* ignore */ }
-  }
-
-  function loadSavedCapacitorCollectionMeta() {
-    try {
-      return JSON.parse(localStorage.getItem(CAPACITOR_COLLECTIONS_KEY) || 'null') || [];
-    } catch { return []; }
-  }
-
-  // Called on startup — if saved collections exist, show a restore banner
-  // instead of the welcome screen so the user can re-pick their files.
-  function maybeShowRestoreBanner() {
-    if (!isCapacitor) return false;
-    const saved = loadSavedCapacitorCollectionMeta();
-    if (!saved.length) return false;
-
-    // Build a simple restore UI inside the welcome screen
-    const welcomeScreen = document.querySelector('.welcome-screen');
-    if (!welcomeScreen) return false;
-
-    const banner = document.createElement('div');
-    banner.id = 'capacitor-restore-banner';
-    banner.style.cssText = `
-      margin: 16px auto 0; max-width: 360px; padding: 16px;
-      background: rgba(255,255,255,0.07); border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.12); text-align: center;
-    `;
-    banner.innerHTML = `
-      <div style="color:#e8e6df;font-size:14px;margin-bottom:12px;">
-        📚 You have <strong>${saved.length}</strong> saved collection${saved.length === 1 ? '' : 's'}.<br>
-        <span style="color:#8fd9cf;font-size:12px;">Re-select your CBZ files to restore them.</span>
-      </div>
-      <button id="capacitor-restore-btn" style="
-        background:#8fd9cf;color:#0a0e0e;border:none;border-radius:8px;
-        padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%;
-      ">Restore Collections</button>
-      <button id="capacitor-restore-skip" style="
-        background:transparent;color:#8fd9cf;border:none;
-        padding:8px;font-size:12px;cursor:pointer;margin-top:6px;width:100%;
-      ">Start fresh instead</button>
-    `;
-    welcomeScreen.appendChild(banner);
-
-    document.getElementById('capacitor-restore-btn').addEventListener('click', () => {
-      banner.remove();
-      // Trigger the normal file picker — user picks files, they get imported as usual
-      if (capacitorFileInput) capacitorFileInput.click();
-    });
-
-    document.getElementById('capacitor-restore-skip').addEventListener('click', () => {
-      localStorage.removeItem(CAPACITOR_COLLECTIONS_KEY);
-      banner.remove();
-    });
-
-    return true;
   }
 
   async function addCollectionFromFolder() {
@@ -3289,7 +3201,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     updateReadingHud();
     progressSaveSuspended = false;
     showToast(deleteSuccessMessage, 'success');
-    saveCapacitorCollections();
   }
 
   // Load and render selected chapter
@@ -3537,9 +3448,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 
 
-  // Initial UI update — show restore banner if saved collections exist
+  // Initial UI update
   showWelcomeView();
-  maybeShowRestoreBanner();
   updateUI();
 </script>
 <script>
