@@ -1,0 +1,11 @@
+{
+	"appId": "com.azan.readermc",
+	"appName": "Manga Reader",
+	"webDir": "www",
+	"server": {
+		"androidScheme": "https"
+	},
+	"android": {
+		"allowMixedContent": true
+	}
+}
