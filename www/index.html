@@ -2507,6 +2507,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     capacitorFileInput.accept = '.cbz,application/zip,application/x-cbz,*/*';
     capacitorFileInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
     document.body.appendChild(capacitorFileInput);
+    capacitorFileInput.addEventListener('click', () => {
+    alert('INPUT CLICKED');
+    });
+
+    capacitorFileInput.addEventListener('change', () => {
+      alert('FILES SELECTED');
+    });
 
     capacitorFileInput.addEventListener('change', async (e) => {
       const fileList = e.target.files;
