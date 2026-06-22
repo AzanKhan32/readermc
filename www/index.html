@@ -2204,6 +2204,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   function writeChapterProgress(chapterId, patch) {
+    if (progressSaveSuspended) return null;
     const state = readState();
     const allProgress = state.chapterProgress || {};
     const existing = allProgress[chapterId] || { pagesRead: 0, totalPages: 0 };
@@ -2245,10 +2246,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (activeCollection) {
       activeCollection.lastChapterIndex = currentChapterIndex;
     }
+    const state = readState();
     writeState({
       lastChapterIndex: currentChapterIndex,
       chapterScrolls: {
-        ...readState().chapterScrolls,
+        ...state.chapterScrolls,
         [chapterId]: window.scrollY
       }
     });
