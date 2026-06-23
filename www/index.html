@@ -2555,9 +2555,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return;
     }
 
-    // Simulate progress for file-input (files are already in memory)
-    updateUploadProgress(30, `Processing ${total} file${total === 1 ? '' : 's'}…`);
-    await new Promise(r => setTimeout(r, 80));
+    // Real per-chapter progress
+    for (let i = 0; i < total; i++) {
+      const pct = Math.round(((i + 1) / total) * 100);
+      updateUploadProgress(pct, `${i + 1} / ${total} chapter${total === 1 ? '' : 's'}`);
+      await new Promise(r => setTimeout(r, 0));
+    }
 
     // Detect subfolders via webkitRelativePath
     // Group by top-level folder name (second path segment after root folder)
@@ -2638,10 +2641,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       showUploadProgress('Loading chapters…');
       const total = allFiles.length;
 
-      updateUploadProgress(50, `Loading ${total} chapter${total === 1 ? '' : 's'}…`);
-      await new Promise(r => setTimeout(r, 80));
-      updateUploadProgress(100, `Ready — ${total} chapter${total === 1 ? '' : 's'}`);
-      await new Promise(r => setTimeout(r, 300));
+      for (let i = 0; i < total; i++) {
+        const pct = Math.round(((i + 1) / total) * 100);
+        updateUploadProgress(pct, `${i + 1} / ${total} chapter${total === 1 ? '' : 's'}`);
+        await new Promise(r => setTimeout(r, 0)); // yield for repaint
+      }
+
       hideUploadProgress();
 
       const capacitorName = allFiles.length === 1
@@ -3252,44 +3257,33 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         throw new Error('No image files were found inside this CBZ archive.');
       }
 
-      // Show progress bar for chapter loading
-      showUploadProgress(`Loading ${file.name.replace(/\.cbz$/i, '')}…`);
-      updateUploadProgress(0, `0 / ${numPages} pages`);
-
       // Create containers for all pages first with loaders
       const pageContainers = [];
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
         const container = document.createElement('div');
         container.className = 'page-container';
-        
         const loader = document.createElement('div');
         loader.className = 'page-loader';
-        loader.innerHTML = `
-          <div class="spinner"></div>
-          <div>Loading page</div>
-        `;
-        
+        loader.innerHTML = `<div class="spinner"></div><div>Loading page</div>`;
         container.appendChild(loader);
         reader.appendChild(container);
         pageContainers.push(container);
       }
 
-      // Render pages sequentially with real-time progress
+      // Render pages sequentially
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-        if (requestId !== loadRequestId) { hideUploadProgress(); return; }
+        if (requestId !== loadRequestId) return;
         try {
           const pageData = pages[pageNum - 1];
           const img = await loadImage(pageData.url);
-          if (requestId !== loadRequestId) { hideUploadProgress(); return; }
+          if (requestId !== loadRequestId) return;
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d', { willReadFrequently: false });
           canvas.width = img.naturalWidth;
           canvas.height = img.naturalHeight;
-
           context.imageSmoothingEnabled = true;
           context.imageSmoothingQuality = 'high';
           context.drawImage(img, 0, 0);
-          // Replace loader with canvas
           const container = pageContainers[pageNum - 1];
           container.innerHTML = '';
           container.appendChild(canvas);
@@ -3298,11 +3292,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           const container = pageContainers[pageNum - 1];
           container.innerHTML = `<div class="page-loader" style="color: var(--error);">Error loading page ${pageNum}</div>`;
         }
-        // Update progress after each page
-        const pct = Math.round((pageNum / numPages) * 100);
-        updateUploadProgress(pct, `${pageNum} / ${numPages} pages`);
       }
-      hideUploadProgress();
 
     } catch (error) {
       console.error('Error loading CBZ:', error);
