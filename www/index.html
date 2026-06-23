@@ -3252,6 +3252,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         throw new Error('No image files were found inside this CBZ archive.');
       }
 
+      // Show progress bar for chapter loading
+      showUploadProgress(`Loading ${file.name.replace(/\.cbz$/i, '')}…`);
+      updateUploadProgress(0, `0 / ${numPages} pages`);
+
       // Create containers for all pages first with loaders
       const pageContainers = [];
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
@@ -3270,13 +3274,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         pageContainers.push(container);
       }
 
-      // Render pages sequentially to avoid memory issues
+      // Render pages sequentially with real-time progress
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-        if (requestId !== loadRequestId) return;
+        if (requestId !== loadRequestId) { hideUploadProgress(); return; }
         try {
           const pageData = pages[pageNum - 1];
           const img = await loadImage(pageData.url);
-          if (requestId !== loadRequestId) return;
+          if (requestId !== loadRequestId) { hideUploadProgress(); return; }
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d', { willReadFrequently: false });
           canvas.width = img.naturalWidth;
@@ -3294,7 +3298,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           const container = pageContainers[pageNum - 1];
           container.innerHTML = `<div class="page-loader" style="color: var(--error);">Error loading page ${pageNum}</div>`;
         }
+        // Update progress after each page
+        const pct = Math.round((pageNum / numPages) * 100);
+        updateUploadProgress(pct, `${pageNum} / ${numPages} pages`);
       }
+      hideUploadProgress();
 
     } catch (error) {
       console.error('Error loading CBZ:', error);
