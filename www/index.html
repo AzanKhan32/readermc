@@ -1095,7 +1095,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     height: 32px;
   }
 
-  /* ── Collections Grid View ───────────────────────────────────────────── */
+  /* ── Collections Grid View ───────────────────────────── */
   #collectionsGridView {
     display: flex;
     flex-direction: column;
@@ -1103,30 +1103,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     background: var(--bg);
     padding-bottom: 5rem;
   }
-
   #collectionsGridView.hidden { display: none; }
-
   .collections-grid-header {
     padding: 3rem 1.25rem 1rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
-
   .collections-grid-title {
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--text);
     letter-spacing: -0.02em;
   }
-
   .collections-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 0.75rem;
     padding: 0 0.75rem;
   }
-
   .coll-card {
     position: relative;
     border-radius: 10px;
@@ -1137,113 +1132,48 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-
-  .coll-card:active {
-    transform: scale(0.96);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  }
-
-  .coll-card-cover {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
+  .coll-card:active { transform: scale(0.96); }
+  .coll-card-cover { width: 100%; height: 100%; object-fit: cover; display: block; }
   .coll-card-cover-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
     font-size: 2.5rem;
   }
-
   .coll-card-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    position: absolute; bottom: 0; left: 0; right: 0;
     padding: 1.5rem 0.5rem 0.5rem;
     background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
   }
-
   .coll-card-title {
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: #fff;
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    font-size: 0.65rem; font-weight: 600; color: #fff; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-
   .coll-card-badge {
-    position: absolute;
-    top: 0.4rem;
-    right: 0.4rem;
-    font-size: 0.6rem;
-    font-weight: 700;
-    padding: 0.15rem 0.4rem;
-    border-radius: 99px;
-    color: #0a0e0e;
-    background: var(--card-accent, #8fd9cf);
+    position: absolute; top: 0.4rem; right: 0.4rem;
+    font-size: 0.6rem; font-weight: 700;
+    padding: 0.15rem 0.4rem; border-radius: 99px;
+    color: #0a0e0e; background: var(--card-accent, #8fd9cf);
   }
-
   .coll-card-progress {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: rgba(255,255,255,0.15);
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 3px; background: rgba(255,255,255,0.15);
   }
-
-  .coll-card-progress-fill {
-    height: 100%;
-    background: var(--card-accent, #8fd9cf);
-    transition: width 0.3s ease;
-  }
-
+  .coll-card-progress-fill { height: 100%; background: var(--card-accent, #8fd9cf); }
   .collections-grid-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 2rem;
-    gap: 1rem;
-    color: var(--text-muted);
-    text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 4rem 2rem; gap: 1rem;
+    color: var(--text-muted); text-align: center;
   }
-
-  .collections-grid-empty svg {
-    width: 48px;
-    height: 48px;
-    opacity: 0.3;
-  }
-
-  /* Chapter list back button */
+  .collections-grid-empty svg { width: 48px; height: 48px; opacity: 0.3; }
   .chapter-list-back-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: none;
-    border: none;
-    color: var(--text);
-    font-size: 1rem;
-    font-weight: 600;
-    padding: 0.75rem 1rem 0.5rem;
-    cursor: pointer;
-    width: 100%;
-    text-align: left;
+    display: flex; align-items: center; gap: 0.5rem;
+    background: none; border: none; color: var(--text);
+    font-size: 1rem; font-weight: 600;
+    padding: 0.75rem 1rem 0.5rem; cursor: pointer; width: auto;
   }
+  .chapter-list-back-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
 
-  .chapter-list-back-btn svg {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-  }
+  .reader-back-btn {
     background: var(--bg-tertiary);
     color: var(--text);
     border: 1px solid var(--border);
@@ -1670,10 +1600,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div id="collectionView" class="collection-view hidden">
     <div class="collection-topbar">
       <button type="button" class="chapter-list-back-btn" id="chapterListBackBtn" aria-label="Back to library">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-        <span id="chapterListBackLabel">Library</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
       <button type="button" class="collection-icon-btn" id="collectionSearchBtn" title="Search chapters" aria-label="Search chapters">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2033,10 +1960,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     rebuildChapterSelect();
 
     if (showList) {
-      showGridView();
+      showCollectionView();
     } else {
       updateUI();
-    }(index, titleEl) {
+    }
+  }
+
+  function startRenameCollectionInMenu(index, titleEl) {
     const collection = collections[index];
     if (!collection || !titleEl) return;
 
@@ -2732,9 +2662,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return;
     }
 
-    // Simulate progress for file-input (files are already in memory)
-    updateUploadProgress(30, `Processing ${total} file${total === 1 ? '' : 's'}…`);
-    await new Promise(r => setTimeout(r, 80));
+    // Real per-chapter progress
+    for (let i = 0; i < total; i++) {
+      const pct = Math.round(((i + 1) / total) * 100);
+      updateUploadProgress(pct, `${i + 1} / ${total} chapter${total === 1 ? '' : 's'}`);
+      await new Promise(r => setTimeout(r, 0));
+    }
 
     // Detect subfolders via webkitRelativePath
     // Group by top-level folder name (second path segment after root folder)
@@ -2815,10 +2748,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       showUploadProgress('Loading chapters…');
       const total = allFiles.length;
 
-      updateUploadProgress(50, `Loading ${total} chapter${total === 1 ? '' : 's'}…`);
-      await new Promise(r => setTimeout(r, 80));
-      updateUploadProgress(100, `Ready — ${total} chapter${total === 1 ? '' : 's'}`);
-      await new Promise(r => setTimeout(r, 300));
+      for (let i = 0; i < total; i++) {
+        const pct = Math.round(((i + 1) / total) * 100);
+        updateUploadProgress(pct, `${i + 1} / ${total} chapter${total === 1 ? '' : 's'}`);
+        await new Promise(r => setTimeout(r, 0)); // yield for repaint
+      }
+
       hideUploadProgress();
 
       const capacitorName = allFiles.length === 1
@@ -2921,34 +2856,20 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   });
 
   if (addMoreBtn) {
-    addMoreBtn.addEventListener('click', () => {
-      void addCollectionFromFolder();
-    });
+    addMoreBtn.addEventListener('click', () => { void addCollectionFromFolder(); });
   }
 
   if (addCollectionFab) {
-    addCollectionFab.addEventListener('click', () => {
-      void addCollectionFromFolder();
-    });
+    addCollectionFab.addEventListener('click', () => { void addCollectionFromFolder(); });
   }
 
   if (chapterListBackBtn) {
-    chapterListBackBtn.addEventListener('click', () => {
-      showGridView();
-    });
+    chapterListBackBtn.addEventListener('click', () => showGridView());
   }
 
-  // Android hardware back button via History API
-  window.addEventListener('popstate', (e) => {
-    const state = e.state?.view;
-    if (currentView === 'reader') {
-      showCollectionView();
-    } else if (currentView === 'list') {
-      showGridView();
-    } else {
-      // Already at grid — let Android handle it (exit app)
-      history.go(-1);
-    }
+  window.addEventListener('popstate', () => {
+    if (currentView === 'reader') showCollectionView();
+    else if (currentView === 'list') showGridView();
   });
 
   if (collectionNamePill) {
@@ -2983,7 +2904,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     renderCollectionsGrid();
     applyReaderTheme();
     updateUI();
-    // Push history state so Android back button works
     history.pushState({ view: 'grid' }, '');
   }
 
@@ -3018,7 +2938,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     renderChapterCards();
     applyReaderTheme();
     updateUI();
-    // Push history state so Android back button returns to grid
     history.pushState({ view: 'list' }, '');
   }
 
@@ -3027,41 +2946,35 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const welcomeScreen = reader.querySelector('.welcome-screen');
     if (welcomeScreen) welcomeScreen.classList.add('hidden');
     reader.classList.remove('hidden');
-    collectionView.classList.add('hidden');
     collectionsGridView.classList.add('hidden');
+    collectionView.classList.add('hidden');
     document.getElementById('appHeader').classList.remove('hidden');
     document.body.classList.add('reader-mode');
     updateCollectionLabel();
     if (readerBackBtn) readerBackBtn.classList.remove('hidden');
     applyReaderTheme();
     updateUI();
-    // Push history state so Android back button returns to chapter list
     history.pushState({ view: 'reader' }, '');
   }
 
   function renderCollectionsGrid() {
     if (!collectionsGrid) return;
     collectionsGrid.innerHTML = '';
-
     if (collections.length === 0) {
       collectionsGridEmpty.classList.remove('hidden');
       return;
     }
     collectionsGridEmpty.classList.add('hidden');
-
     collections.forEach((col, index) => {
       const [accent] = getCollectionAccent(index);
       const card = document.createElement('div');
       card.className = 'coll-card';
       card.style.setProperty('--card-accent', accent);
 
-      // Compute overall collection read progress
-      const collectionId = col.id;
-      let totalPct = 0;
-      let countedChapters = 0;
+      // Overall read progress across chapters
+      let totalPct = 0, countedChapters = 0;
       col.files.forEach(file => {
-        const chapterId = getChapterId(file, collectionId);
-        const prog = readChapterProgress(chapterId);
+        const prog = readChapterProgress(getChapterId(file, col.id));
         if (prog.totalPages > 0) {
           totalPct += Math.round((Math.min(prog.pagesRead, prog.totalPages) / prog.totalPages) * 100);
           countedChapters++;
@@ -3069,33 +2982,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       });
       const overallPct = countedChapters > 0 ? Math.round(totalPct / countedChapters) : 0;
 
-      // Try to get cover from thumbnail cache using first chapter
+      // Cover from thumbnail cache
       const firstFile = col.files[0];
-      const firstChapterId = firstFile ? getChapterId(firstFile, collectionId) : null;
+      const firstChapterId = firstFile ? getChapterId(firstFile, col.id) : null;
       const cachedThumb = firstChapterId ? thumbnailCache.get(firstChapterId) : null;
 
       card.innerHTML = `
         ${cachedThumb
           ? `<img class="coll-card-cover" src="${cachedThumb}" alt="${col.name}">`
-          : `<div class="coll-card-cover-placeholder" style="background:color-mix(in srgb, ${accent} 15%, var(--bg-secondary))">📚</div>`
-        }
-        <div class="coll-card-overlay">
-          <div class="coll-card-title">${col.name}</div>
-        </div>
+          : `<div class="coll-card-cover-placeholder" style="background:color-mix(in srgb,${accent} 15%,var(--bg-secondary))">📚</div>`}
+        <div class="coll-card-overlay"><div class="coll-card-title">${col.name}</div></div>
         <div class="coll-card-badge">${col.files.length}</div>
-        <div class="coll-card-progress">
-          <div class="coll-card-progress-fill" style="width:${overallPct}%"></div>
-        </div>
+        <div class="coll-card-progress"><div class="coll-card-progress-fill" style="width:${overallPct}%"></div></div>
       `;
 
       card.addEventListener('click', () => {
-        setActiveCollection(index, { showList: true });
+        setActiveCollection(index, { showList: false });
         showCollectionView();
       });
 
       collectionsGrid.appendChild(card);
 
-      // Load cover thumbnail lazily if not cached
+      // Lazy load cover if not cached
       if (!cachedThumb && firstFile && firstChapterId) {
         loadChapterThumbnail(firstFile, index, firstChapterId, 0).then(() => {
           const thumb = thumbnailCache.get(firstChapterId);
@@ -3104,8 +3012,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             img.className = 'coll-card-cover';
             img.src = thumb;
             img.alt = col.name;
-            const placeholder = card.querySelector('.coll-card-cover-placeholder');
-            if (placeholder) placeholder.replaceWith(img);
+            const ph = card.querySelector('.coll-card-cover-placeholder');
+            if (ph) ph.replaceWith(img);
           }
         }).catch(() => {});
       }
@@ -3556,20 +3464,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
         const container = document.createElement('div');
         container.className = 'page-container';
-        
         const loader = document.createElement('div');
         loader.className = 'page-loader';
-        loader.innerHTML = `
-          <div class="spinner"></div>
-          <div>Loading page</div>
-        `;
-        
+        loader.innerHTML = `<div class="spinner"></div><div>Loading page</div>`;
         container.appendChild(loader);
         reader.appendChild(container);
         pageContainers.push(container);
       }
 
-      // Render pages sequentially to avoid memory issues
+      // Render pages sequentially
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
         if (requestId !== loadRequestId) return;
         try {
@@ -3580,11 +3483,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           const context = canvas.getContext('2d', { willReadFrequently: false });
           canvas.width = img.naturalWidth;
           canvas.height = img.naturalHeight;
-
           context.imageSmoothingEnabled = true;
           context.imageSmoothingQuality = 'high';
           context.drawImage(img, 0, 0);
-          // Replace loader with canvas
           const container = pageContainers[pageNum - 1];
           container.innerHTML = '';
           container.appendChild(canvas);
@@ -3747,7 +3648,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 
 
-  // Initial UI — push base history state then show appropriate view
+  // Initial UI — show grid if collections exist, else welcome
   history.replaceState({ view: 'grid' }, '');
   if (collections.length > 0) {
     showGridView();
