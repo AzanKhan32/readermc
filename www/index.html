@@ -1159,6 +1159,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     height: 3px; background: rgba(255,255,255,0.15);
   }
   .coll-card-progress-fill { height: 100%; background: var(--card-accent, #8fd9cf); }
+  .coll-card-delete-btn {
+    position: absolute; top: 0.4rem; left: 0.4rem;
+    width: 2rem; height: 2rem;
+    background: rgba(239,68,68,0.92);
+    border: none; border-radius: 50%;
+    color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transform: scale(0.7);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  }
+  .coll-card-delete-btn svg { width: 13px; height: 13px; }
+  .coll-card.delete-mode .coll-card-delete-btn {
+    opacity: 1; pointer-events: auto; transform: scale(1);
+  }
+  .coll-card.delete-mode { outline: 2px solid rgba(239,68,68,0.7); }
+  .coll-card.delete-mode:active { transform: none; }
   .collections-grid-empty {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; padding: 4rem 2rem; gap: 1rem;
@@ -1602,12 +1621,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <button type="button" class="chapter-list-back-btn" id="chapterListBackBtn" aria-label="Back to library">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
-      <button type="button" class="collection-icon-btn" id="collectionSearchBtn" title="Search chapters" aria-label="Search chapters">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="7"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-      </button>
       <button type="button" class="collection-name-pill" id="collectionNamePill" title="Collection">
         <span id="collectionName">Collection</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1621,12 +1634,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         </div>
         <div class="collection-menu-list" id="collectionMenuList"></div>
       </div>
-      <button type="button" class="collection-icon-btn" id="collectionSettingsBtn" title="Settings" aria-label="Settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-      </button>
     </div>
 
     <div id="chapterCardList"></div>
@@ -2688,13 +2695,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (!hasSubfolders || bySubfolder.size <= 1) {
       // Single collection
       updateUploadProgress(100, `Ready — ${total} chapter${total === 1 ? '' : 's'}`);
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 80));
       hideUploadProgress();
       await handleSelectedFiles(fileList, {});
     } else {
       // Multiple manhwas
       updateUploadProgress(100, `Found ${bySubfolder.size} manhwa${bySubfolder.size === 1 ? '' : 's'}`);
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 80));
       hideUploadProgress();
 
       // Get root folder name from first file's path
@@ -2804,7 +2811,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           });
 
           updateUploadProgress(100, `Ready — ${allFiles.length} chapter${allFiles.length === 1 ? '' : 's'}`);
-          await new Promise(r => setTimeout(r, 350));
+          await new Promise(r => setTimeout(r, 80));
           hideUploadProgress();
 
           if (!allFiles.length) {
@@ -2820,7 +2827,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         } else {
           // Multiple manhwas: each subfolder is a separate collection
           updateUploadProgress(100, `Found ${manhwaMap.size} manhwa${manhwaMap.size === 1 ? '' : 's'}`);
-          await new Promise(r => setTimeout(r, 350));
+          await new Promise(r => setTimeout(r, 80));
           hideUploadProgress();
 
           let addedCount = 0;
@@ -2994,12 +3001,50 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <div class="coll-card-overlay"><div class="coll-card-title">${col.name}</div></div>
         <div class="coll-card-badge">${col.files.length}</div>
         <div class="coll-card-progress"><div class="coll-card-progress-fill" style="width:${overallPct}%"></div></div>
+        <button class="coll-card-delete-btn" title="Delete collection" aria-label="Delete collection">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/>
+          </svg>
+        </button>
       `;
 
       card.addEventListener('click', () => {
+        if (card.classList.contains('delete-mode')) return; // ignore tap when in delete mode
         setActiveCollection(index, { showList: false });
         showCollectionView();
       });
+
+      // Long press → reveal delete button
+      let lpTimer = null;
+      const startLp = (e) => {
+        lpTimer = setTimeout(() => {
+          lpTimer = null;
+          card.classList.add('delete-mode');
+          // Dismiss delete mode when tapping anywhere else
+          const dismiss = (ev) => {
+            if (!card.contains(ev.target)) {
+              card.classList.remove('delete-mode');
+              document.removeEventListener('pointerdown', dismiss);
+            }
+          };
+          document.addEventListener('pointerdown', dismiss);
+        }, 550);
+      };
+      const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+      card.addEventListener('pointerdown', startLp);
+      card.addEventListener('pointerup', cancelLp);
+      card.addEventListener('pointercancel', cancelLp);
+      card.addEventListener('pointermove', cancelLp);
+
+      // Delete button
+      const deleteBtn = card.querySelector('.coll-card-delete-btn');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const capturedIndex = index; // capture before splice shifts indices
+          deleteCollection(capturedIndex);
+        });
+      }
 
       collectionsGrid.appendChild(card);
 
@@ -3070,7 +3115,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return { key: 'pending', label: 'Pending', icon: clockSvgMarkup() };
   }
 
+  let renderChapterCardsTimer = null;
   function renderChapterCards() {
+    if (renderChapterCardsTimer) return; // already queued
+    renderChapterCardsTimer = requestAnimationFrame(() => {
+      renderChapterCardsTimer = null;
+      _renderChapterCardsNow();
+    });
+  }
+  function _renderChapterCardsNow() {
     if (!chapterCardList) return;
     chapterCardList.innerHTML = '';
     resetThumbnailObserver();
@@ -3217,7 +3270,27 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
   }
 
+  // Concurrency limiter: at most 3 simultaneous thumbnail decodes
+  let _thumbActive = 0;
+  const _thumbQueue = [];
+  function _thumbSlot(fn) {
+    return new Promise((resolve, reject) => {
+      const run = () => {
+        _thumbActive++;
+        Promise.resolve().then(fn).then(resolve, reject).finally(() => {
+          _thumbActive--;
+          if (_thumbQueue.length > 0) _thumbQueue.shift()();
+        });
+      };
+      if (_thumbActive < 3) { run(); } else { _thumbQueue.push(run); }
+    });
+  }
+
   async function loadChapterThumbnail(file, index, chapterId, knownTotalPages) {
+    return _thumbSlot(() => _loadChapterThumbnailWork(file, index, chapterId, knownTotalPages));
+  }
+
+  async function _loadChapterThumbnailWork(file, index, chapterId, knownTotalPages) {
     const thumbEl = document.getElementById(`thumb-${index}`);
     try {
       let thumbUrl = thumbnailCache.get(chapterId);
@@ -3332,6 +3405,48 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return { deleted: false, reason: error?.name || 'delete_failed' };
     }
   }
+  // Remove a whole collection (by index) and clean up its state
+  function deleteCollection(index) {
+    if (index < 0 || index >= collections.length) return;
+    const col = collections[index];
+
+    // Revoke any cached thumbnails for this collection
+    col.files.forEach(file => {
+      const cid = getChapterId(file, col.id);
+      const thumbUrl = thumbnailCache.get(cid);
+      if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+      thumbnailCache.delete(cid);
+    });
+
+    // Remove saved progress/scroll state for this collection
+    const state = readState();
+    const nextProgress = { ...(state.chapterProgress || {}) };
+    const nextScrolls  = { ...(state.chapterScrolls  || {}) };
+    Object.keys(nextProgress).forEach(k => { if (k.startsWith(`${col.id}::`)) delete nextProgress[k]; });
+    Object.keys(nextScrolls).forEach(k  => { if (k.startsWith(`${col.id}::`)) delete nextScrolls[k]; });
+    writeState({ chapterProgress: nextProgress, chapterScrolls: nextScrolls });
+
+    collections.splice(index, 1);
+
+    // Fix up active collection pointer
+    if (collections.length === 0) {
+      activeCollectionIndex = -1;
+      chapters = [];
+      currentChapterIndex = -1;
+      currentChapterMedia = [];
+      currentChapterPageCount = 0;
+    } else {
+      activeCollectionIndex = Math.min(activeCollectionIndex, collections.length - 1);
+      if (activeCollectionIndex < 0) activeCollectionIndex = 0;
+      syncChaptersFromActiveCollection();
+    }
+
+    renderCollectionsGrid();
+    if (collections.length === 0) {
+      showWelcomeView();
+    }
+  }
+
   async function deleteChapterFromList(index) {
     const activeCollection = getActiveCollection();
     if (!activeCollection || index < 0 || index >= activeCollection.files.length) return;
@@ -3364,15 +3479,30 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     thumbnailCache.delete(removedChapterId);
 
     if (activeCollection.files.length === 0) {
-      syncChaptersFromActiveCollection();
+      // Collection is now empty — remove it entirely
+      const emptyIndex = collections.indexOf(activeCollection);
+      if (emptyIndex >= 0) {
+        // thumbnailCache already cleaned above; just splice and redirect
+        collections.splice(emptyIndex, 1);
+        if (collections.length === 0) {
+          activeCollectionIndex = -1;
+          chapters = [];
+        } else {
+          activeCollectionIndex = Math.min(emptyIndex, collections.length - 1);
+          syncChaptersFromActiveCollection();
+        }
+      }
       currentChapterIndex = -1;
       currentChapterMedia = [];
       currentChapterPageCount = 0;
       rebuildChapterSelect();
       renderCollectionMenu();
-      renderChapterCards();
-      showCollectionView();
       showToast(deleteSuccessMessage, 'success');
+      if (collections.length === 0) {
+        showWelcomeView();
+      } else {
+        showGridView();
+      }
       return;
     }
 
