@@ -383,7 +383,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   overflow-anchor: none;
 }
 
-  canvas {
+  canvas, .page-container img {
   width: 100%;
   height: auto;
   display: block;
@@ -1165,6 +1165,39 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     color: var(--text-muted); text-align: center;
   }
   .collections-grid-empty svg { width: 48px; height: 48px; opacity: 0.3; }
+
+  /* Long-press delete overlay on collection cards */
+  .coll-card-delete-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 0.5rem;
+    border-radius: 10px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.18s ease;
+    z-index: 5;
+  }
+  .coll-card.long-pressed .coll-card-delete-overlay {
+    opacity: 1; pointer-events: auto;
+  }
+  .coll-card-delete-btn {
+    background: rgba(239,68,68,0.9);
+    border: none; border-radius: 10px;
+    color: #fff; font-size: 0.8rem; font-weight: 700;
+    padding: 0.6rem 1.2rem;
+    display: flex; align-items: center; gap: 0.4rem;
+    cursor: pointer; transition: background 0.15s ease;
+  }
+  .coll-card-delete-btn:hover { background: rgba(239,68,68,1); }
+  .coll-card-delete-btn svg { width: 14px; height: 14px; }
+  .coll-card-cancel-btn {
+    background: rgba(255,255,255,0.12);
+    border: none; border-radius: 10px;
+    color: rgba(255,255,255,0.8); font-size: 0.75rem; font-weight: 600;
+    padding: 0.45rem 1rem; cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .coll-card-cancel-btn:hover { background: rgba(255,255,255,0.2); }
   .chapter-list-back-btn {
     display: flex; align-items: center; gap: 0.5rem;
     background: none; border: none; color: var(--text);
@@ -1450,8 +1483,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
   }
 
-  canvas {
-    animation: fadeIn 0.3s ease;
+  .page-container img {
+    animation: fadeIn 0.2s ease;
   }
 
   /* ---- Upload progress overlay ---- */
@@ -1602,12 +1635,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <button type="button" class="chapter-list-back-btn" id="chapterListBackBtn" aria-label="Back to library">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
-      <button type="button" class="collection-icon-btn" id="collectionSearchBtn" title="Search chapters" aria-label="Search chapters">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="7"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-      </button>
       <button type="button" class="collection-name-pill" id="collectionNamePill" title="Collection">
         <span id="collectionName">Collection</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1621,12 +1648,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         </div>
         <div class="collection-menu-list" id="collectionMenuList"></div>
       </div>
-      <button type="button" class="collection-icon-btn" id="collectionSettingsBtn" title="Settings" aria-label="Settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-      </button>
     </div>
 
     <div id="chapterCardList"></div>
@@ -1725,15 +1746,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return /\.(avif|gif|heic|heif|jpeg|jpg|png|webp)$/i.test(name || '');
   }
 
-  function loadImage(url) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Failed to decode image page'));
-      img.src = url;
-    });
-  }
-
   async function readCbzPages(file) {
     const zip = await JSZip.loadAsync(await file.arrayBuffer());
     const entries = [];
@@ -1749,14 +1761,22 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       sensitivity: 'base'
     }));
 
-    const pages = [];
-    for (const entry of entries) {
-      const blob = await entry.async('blob');
-      pages.push({
-        name: entry.name,
-        url: URL.createObjectURL(blob)
-      });
+    // Parallel extraction with concurrency cap (8 at a time) for speed
+    const CONCURRENCY = 8;
+    const pages = new Array(entries.length);
+    let idx = 0;
+
+    async function worker() {
+      while (idx < entries.length) {
+        const i = idx++;
+        const entry = entries[i];
+        const blob = await entry.async('blob');
+        pages[i] = { name: entry.name, url: URL.createObjectURL(blob) };
+      }
     }
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, entries.length) }, worker);
+    await Promise.all(workers);
 
     return pages;
   }
@@ -3002,7 +3022,64 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <div class="coll-card-progress"><div class="coll-card-progress-fill" style="width:${overallPct}%"></div></div>
       `;
 
-      card.addEventListener('click', () => {
+      // Delete overlay (shown on long-press)
+      const deleteOverlay = document.createElement('div');
+      deleteOverlay.className = 'coll-card-delete-overlay';
+      deleteOverlay.innerHTML = `
+        <button class="coll-card-delete-btn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"></path><path d="M8 6V4h8v2"></path>
+            <path d="M6 6l1 14h10l1-14"></path>
+            <path d="M10 11v6"></path><path d="M14 11v6"></path>
+          </svg>Delete
+        </button>
+        <button class="coll-card-cancel-btn" type="button">Cancel</button>
+      `;
+      card.appendChild(deleteOverlay);
+
+      // Long-press detection
+      let lpTimer = null;
+      const startLp = () => { lpTimer = setTimeout(() => { lpTimer = null; card.classList.add('long-pressed'); }, 500); };
+      const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+      card.addEventListener('pointerdown', startLp);
+      card.addEventListener('pointerup', cancelLp);
+      card.addEventListener('pointercancel', cancelLp);
+      card.addEventListener('pointermove', cancelLp);
+
+      deleteOverlay.querySelector('.coll-card-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.classList.remove('long-pressed');
+        // Remove thumbnail cache for this collection
+        col.files.forEach(f => {
+          const cid = getChapterId(f, col.id);
+          const t = thumbnailCache.get(cid);
+          if (t) URL.revokeObjectURL(t);
+          thumbnailCache.delete(cid);
+        });
+        // Remove collection
+        collections.splice(index, 1);
+        if (activeCollectionIndex === index) {
+          activeCollectionIndex = -1;
+          currentChapterIndex = -1;
+          currentChapterMedia = [];
+          currentChapterPageCount = 0;
+        } else if (activeCollectionIndex > index) {
+          activeCollectionIndex--;
+        }
+        if (collections.length === 0) {
+          showWelcomeView();
+        } else {
+          renderCollectionsGrid();
+        }
+        showToast('Collection deleted', 'success');
+      });
+      deleteOverlay.querySelector('.coll-card-cancel-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.classList.remove('long-pressed');
+      });
+
+      card.addEventListener('click', (e) => {
+        if (card.classList.contains('long-pressed')) { e.stopPropagation(); return; }
         setActiveCollection(index, { showList: false });
         showCollectionView();
       });
@@ -3465,42 +3542,26 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         throw new Error('No image files were found inside this CBZ archive.');
       }
 
-      // Create containers for all pages first with loaders
-      const pageContainers = [];
+      // Create all page containers at once with images directly (no canvas, much faster)
+      const fragment = document.createDocumentFragment();
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
         const container = document.createElement('div');
         container.className = 'page-container';
-        const loader = document.createElement('div');
-        loader.className = 'page-loader';
-        loader.innerHTML = `<div class="spinner"></div><div>Loading page</div>`;
-        container.appendChild(loader);
-        reader.appendChild(container);
-        pageContainers.push(container);
-      }
-
-      // Render pages sequentially
-      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-        if (requestId !== loadRequestId) return;
-        try {
-          const pageData = pages[pageNum - 1];
-          const img = await loadImage(pageData.url);
-          if (requestId !== loadRequestId) return;
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d', { willReadFrequently: false });
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          context.imageSmoothingEnabled = true;
-          context.imageSmoothingQuality = 'high';
-          context.drawImage(img, 0, 0);
-          const container = pageContainers[pageNum - 1];
-          container.innerHTML = '';
-          container.appendChild(canvas);
-        } catch (pageError) {
-          console.error(`Error rendering page ${pageNum}:`, pageError);
-          const container = pageContainers[pageNum - 1];
-          container.innerHTML = `<div class="page-loader" style="color: var(--error);">Error loading page ${pageNum}</div>`;
+        const pageData = pages[pageNum - 1];
+        if (pageData?.url) {
+          const img = document.createElement('img');
+          img.src = pageData.url;
+          img.alt = `Page ${pageNum}`;
+          img.loading = pageNum <= 3 ? 'eager' : 'lazy';
+          img.decoding = 'async';
+          img.style.cssText = 'width:100%;height:auto;display:block;';
+          container.appendChild(img);
+        } else {
+          container.innerHTML = `<div class="page-loader" style="color:var(--error);">Error loading page ${pageNum}</div>`;
         }
+        fragment.appendChild(container);
       }
+      reader.appendChild(fragment);
 
     } catch (error) {
       console.error('Error loading CBZ:', error);
