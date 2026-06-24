@@ -3550,11 +3550,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         const pageData = pages[pageNum - 1];
         if (pageData?.url) {
           const img = document.createElement('img');
-          img.src = pageData.url;
           img.alt = `Page ${pageNum}`;
-          img.loading = pageNum <= 3 ? 'eager' : 'lazy';
           img.decoding = 'async';
           img.style.cssText = 'width:100%;height:auto;display:block;';
+          if (pageNum <= 5) {
+            // First few pages: load immediately
+            img.src = pageData.url;
+          } else {
+            // Store URL in data-src; IntersectionObserver triggers load 3 viewports ahead
+            img.dataset.src = pageData.url;
+            img.style.minHeight = '100vh';
+          }
           container.appendChild(img);
         } else {
           container.innerHTML = `<div class="page-loader" style="color:var(--error);">Error loading page ${pageNum}</div>`;
@@ -3562,6 +3568,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         fragment.appendChild(container);
       }
       reader.appendChild(fragment);
+
+      // Preload images 3 full viewport-heights ahead so they are ready before the reader reaches them
+      const preloadObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            if (img.dataset.src) {
+              img.src = img.dataset.src;
+              delete img.dataset.src;
+              img.style.minHeight = '';
+            }
+            preloadObserver.unobserve(img);
+          }
+        });
+      }, { rootMargin: '0px 0px 300% 0px', threshold: 0 });
+
+      reader.querySelectorAll('img[data-src]').forEach(img => preloadObserver.observe(img));
 
     } catch (error) {
       console.error('Error loading CBZ:', error);
