@@ -5,6 +5,7 @@ import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 
@@ -16,6 +17,8 @@ import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.BridgeActivity;
 
+import androidx.activity.result.ActivityResult;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
@@ -24,19 +27,14 @@ import java.util.Base64;
 public class MainActivity extends BridgeActivity {
 
     @Override
-    public void onCreate(android.os.Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativePlugin.class);
         super.onCreate(savedInstanceState);
     }
 
-    // ─── Capacitor Plugin ────────────────────────────────────────────────────
-
     @CapacitorPlugin(name = "NativePlugin")
     public static class NativePlugin extends Plugin {
 
-        private static final int WEBVIEW_REQUEST_CODE = 1001;
-
-        // Called from JS: NativePlugin.openWebView({ url: "https://..." })
         @PluginMethod
         public void openWebView(PluginCall call) {
             String url = call.getString("url");
@@ -45,7 +43,7 @@ public class MainActivity extends BridgeActivity {
                 return;
             }
             saveCall(call);
-            Intent intent = new Intent(getActivity(), WebViewActivity.class);
+            Intent intent = new Intent(getActivity(), com.azan.readermc.WebViewActivity.class);
             intent.putExtra("url", url);
             startActivityForResult(call, intent, "handleWebViewResult");
         }
@@ -65,7 +63,6 @@ public class MainActivity extends BridgeActivity {
             }
         }
 
-        // Called from JS: NativePlugin.saveCbz({ filename: "001.cbz", data: "<base64>" })
         @PluginMethod
         public void saveCbz(PluginCall call) {
             String filename = call.getString("filename");
@@ -80,7 +77,6 @@ public class MainActivity extends BridgeActivity {
                 byte[] bytes = Base64.getDecoder().decode(base64Data);
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    // Android 10+ — use MediaStore, no permissions needed
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
                     values.put(MediaStore.Downloads.MIME_TYPE, "application/zip");
@@ -103,12 +99,10 @@ public class MainActivity extends BridgeActivity {
                         os.write(bytes);
                     }
                 } else {
-                    // Android 9 and below — write directly to Downloads folder
                     File downloadsDir = new File(
                             Environment.getExternalStoragePublicDirectory(
                                     Environment.DIRECTORY_DOWNLOADS), "MangaReader");
                     if (!downloadsDir.exists()) downloadsDir.mkdirs();
-
                     File outFile = new File(downloadsDir, filename);
                     try (FileOutputStream fos = new FileOutputStream(outFile)) {
                         fos.write(bytes);
@@ -125,7 +119,6 @@ public class MainActivity extends BridgeActivity {
             }
         }
 
-        // Called from JS: NativePlugin.checkCbzExists({ filename: "001.cbz" })
         @PluginMethod
         public void checkCbzExists(PluginCall call) {
             String filename = call.getString("filename");
