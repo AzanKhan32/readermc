@@ -2923,6 +2923,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       // Convert to Array BEFORE clearing — Android WebView can invalidate
       // the FileList reference after e.target.value is reset
       const allFiles = Array.from(e.target.files || []).filter(f => /\.cbz$/i.test(f.name));
+      // Tag each file with its native path so we can delete it from disk later
+      allFiles.forEach(f => {
+        f.__capacitorPath = f.path || f.localURL || f.nativePath || null;
+        f.__capacitorName = f.name;
+      });
       e.target.value = '';
 
       if (allFiles.length === 0) {
@@ -3551,6 +3556,24 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   async function deleteChapterFileOnDisk(collection, file) {
     if (!collection || !file) return { deleted: false, reason: 'no_handle' };
 
+    // ── Capacitor / Android path ──────────────────────────────────────────
+    if (isCapacitor) {
+      const filename = file.__capacitorName || file.name;
+      if (!filename) return { deleted: false, reason: 'no_filename' };
+      try {
+        const NativePlugin = window.Capacitor?.Plugins?.NativePlugin;
+        if (!NativePlugin) return { deleted: false, reason: 'no_plugin' };
+        const result = await NativePlugin.deleteCbz({ filename });
+        return result?.success
+          ? { deleted: true }
+          : { deleted: false, reason: 'plugin_returned_false' };
+      } catch (err) {
+        console.warn('NativePlugin.deleteCbz failed:', err);
+        return { deleted: false, reason: err?.message || 'plugin_error' };
+      }
+    }
+
+    // ── Web / File System Access API path ────────────────────────────────
     const handle = await resolveCollectionDirectoryHandle(collection);
     if (!handle) return { deleted: false, reason: 'no_handle' };
 
@@ -3594,8 +3617,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     removeChapterState(removedChapterId);
 
     const diskDeleteResult = await deleteChapterFileOnDisk(activeCollection, removedFile);
-    if ((activeCollection.directoryHandle || activeCollection.files?.some((file) => !!file.__readerPath || !!file.webkitRelativePath)) && !diskDeleteResult.deleted) {
-      showToast('Removed from reader, but the browser could not delete the file from disk', 'error');
+    if (!diskDeleteResult.deleted) {
+      if (isCapacitor) {
+        showToast('Removed from reader, but could not delete file from device', 'error');
+      } else if (activeCollection.directoryHandle || activeCollection.files?.some((file) => !!file.__readerPath || !!file.webkitRelativePath)) {
+        showToast('Removed from reader, but the browser could not delete the file from disk', 'error');
+      }
     }
     const deleteSuccessMessage = diskDeleteResult.deleted
       ? 'Chapter deleted from disk'

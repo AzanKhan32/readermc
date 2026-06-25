@@ -154,5 +154,52 @@ public class MainActivity extends BridgeActivity {
             ret.put("exists", exists);
             call.resolve(ret);
         }
+
+        @PluginMethod
+        public void deleteCbz(PluginCall call) {
+            String filename = call.getString("filename");
+            if (filename == null) {
+                call.reject("filename is required");
+                return;
+            }
+
+            try {
+                boolean deleted = false;
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    android.database.Cursor cursor = getActivity().getContentResolver().query(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            new String[]{MediaStore.Downloads._ID},
+                            MediaStore.Downloads.DISPLAY_NAME + "=? AND " +
+                            MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
+                            new String[]{filename, "%" + "MangaReader" + "%"},
+                            null
+                    );
+                    if (cursor != null && cursor.moveToFirst()) {
+                        long id = cursor.getLong(
+                                cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                        Uri deleteUri = Uri.withAppendedPath(
+                                MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
+                        int rows = getActivity().getContentResolver().delete(
+                                deleteUri, null, null);
+                        deleted = rows > 0;
+                        cursor.close();
+                    }
+                } else {
+                    File f = new File(
+                            Environment.getExternalStoragePublicDirectory(
+                                    Environment.DIRECTORY_DOWNLOADS),
+                            "MangaReader/" + filename);
+                    deleted = f.exists() && f.delete();
+                }
+
+                JSObject ret = new JSObject();
+                ret.put("success", deleted);
+                call.resolve(ret);
+
+            } catch (Exception e) {
+                call.reject("Failed to delete CBZ: " + e.getMessage());
+            }
+        }
     }
 }
