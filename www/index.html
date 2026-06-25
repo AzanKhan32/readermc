@@ -1664,11 +1664,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 <header id="appHeader" class="hidden">
   <div class="header-content">
     <div class="title">
-      <button class="reader-back-btn hidden" id="readerBackBtn" title="Back to chapters" aria-label="Back to chapters">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
         <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
@@ -3965,27 +3960,16 @@ menuOverlay.addEventListener('click', closeMenu);
 
 menuLibraryBtn.addEventListener('click', () => {
   closeMenu();
-  // Show collections grid (library)
-  document.getElementById('collectionsGridView').classList.remove('hidden');
-  document.getElementById('collectionView').classList.add('hidden');
-  document.getElementById('reader').classList.add('hidden');
-  document.getElementById('appHeader').classList.add('hidden');
-  document.body.classList.remove('reader-mode');
-  const dlView = document.getElementById('downloadView');
-  if (dlView) dlView.classList.remove('active');
+  if (currentView === 'reader') {
+    showCollectionView();
+  } else {
+    showGridView();
+  }
 });
 
 menuDownloadBtn.addEventListener('click', () => {
   closeMenu();
-  const dlView = document.getElementById('downloadView');
-  if (dlView) {
-    dlView.classList.add('active');
-    document.getElementById('collectionsGridView').classList.add('hidden');
-    document.getElementById('collectionView').classList.add('hidden');
-    document.getElementById('reader').classList.add('hidden');
-    document.getElementById('appHeader').classList.add('hidden');
-    document.body.classList.remove('reader-mode');
-  }
+  void addCollectionFromFolder();
 });
 
 menuAddCollectionBtn.addEventListener('click', () => {
