@@ -79,7 +79,7 @@ public class MainActivity extends BridgeActivity {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
-                    values.put(MediaStore.Downloads.MIME_TYPE, "application/zip");
+                    values.put(MediaStore.Downloads.MIME_TYPE, "application/x-cbz");
                     values.put(MediaStore.Downloads.RELATIVE_PATH,
                             Environment.DIRECTORY_DOWNLOADS + "/MangaReader");
 
