@@ -3969,7 +3969,15 @@ menuLibraryBtn.addEventListener('click', () => {
 
 menuDownloadBtn.addEventListener('click', () => {
   closeMenu();
-  void addCollectionFromFolder();
+  const dlView = document.getElementById('downloadView');
+  if (dlView) {
+    dlView.classList.add('active');
+    document.getElementById('collectionsGridView').classList.add('hidden');
+    document.getElementById('collectionView').classList.add('hidden');
+    document.getElementById('reader').classList.add('hidden');
+    document.getElementById('appHeader').classList.add('hidden');
+    document.body.classList.remove('reader-mode');
+  }
 });
 
 menuAddCollectionBtn.addEventListener('click', () => {
