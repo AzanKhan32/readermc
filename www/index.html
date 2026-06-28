@@ -3032,25 +3032,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           const total = result.files.length;
           updateUploadProgress(40, `Found ${total} chapter${total === 1 ? '' : 's'}…`);
 
-          // Convert each entry to a File object by reading bytes natively
-          const makeFileObjects = async (entries, subfolder) => {
+          // Files already contain base64 data read natively — convert directly to File objects
+          const makeFileObjects = (entries, subfolder) => {
             const fileObjects = [];
             for (const entry of entries) {
               try {
-                const { data } = await NativePlugin.readFileAsBase64({ uri: entry.uri });
-                const binary = atob(data);
+                const binary = atob(entry.data);
                 const bytes = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
                 const blob = new Blob([bytes], { type: 'application/zip' });
                 const file = new File([blob], entry.name, { type: 'application/zip' });
-                file.__capacitorPath = entry.path || entry.uri;
                 file.__capacitorName = entry.name;
                 file.webkitRelativePath = subfolder
                   ? `${folderName}/${subfolder}/${entry.name}`
                   : `${folderName}/${entry.name}`;
                 fileObjects.push(file);
               } catch (err) {
-                console.warn('Could not read file:', entry.name, err);
+                console.warn('Could not decode file:', entry.name, err);
               }
             }
             return fileObjects;
@@ -3059,15 +3057,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           const hasSubfolders = bySubfolder.size > 1 || !bySubfolder.has('__root__');
 
           if (!hasSubfolders) {
-            // Single collection
-            const fileObjects = [];
-            for (let i = 0; i < result.files.length; i++) {
-              const entry = result.files[i];
-              const pct = Math.round(40 + ((i + 1) / result.files.length) * 55);
-              updateUploadProgress(pct, `Reading ${i + 1} / ${result.files.length}…`);
-              const made = await makeFileObjects([entry], null);
-              fileObjects.push(...made);
-            }
+            // Single collection — all files already decoded
+            updateUploadProgress(80, `Loading ${total} chapter${total === 1 ? '' : 's'}…`);
+            const fileObjects = makeFileObjects(result.files, null);
             updateUploadProgress(100, `Ready — ${fileObjects.length} chapter${fileObjects.length === 1 ? '' : 's'}`);
             await new Promise(r => setTimeout(r, 80));
             hideUploadProgress();
@@ -3084,7 +3076,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             for (const [subKey, entries] of bySubfolder) {
               if (!entries.length) continue;
               const subName = subKey === '__root__' ? folderName : subKey;
-              const fileObjects = await makeFileObjects(entries, subKey === '__root__' ? null : subKey);
+              const fileObjects = makeFileObjects(entries, subKey === '__root__' ? null : subKey);
               processed += fileObjects.length;
               updateUploadProgress(
                 Math.min(95, 40 + Math.round((processed / total) * 55)),
