@@ -1664,11 +1664,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 <header id="appHeader" class="hidden">
   <div class="header-content">
     <div class="title">
-      <button class="reader-back-btn hidden" id="readerBackBtn" title="Back to chapters" aria-label="Back to chapters">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
         <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
@@ -1999,7 +1994,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   const collectionMenuCount = document.getElementById('collectionMenuCount');
   const collectionNamePill = document.getElementById('collectionNamePill');
   const addMoreBtn = document.getElementById('addMoreBtn');
-  const readerBackBtn = document.getElementById('readerBackBtn');
   const collectionsGridView = document.getElementById('collectionsGridView');
   const collectionsGrid = document.getElementById('collectionsGrid');
   const collectionsGridEmpty = document.getElementById('collectionsGridEmpty');
@@ -2066,6 +2060,38 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const baseName = (fileList[0]?.name || 'Collection').replace(/\.cbz$/i, '').trim();
       return baseName || `Collection ${fallbackIndex + 1}`;
     }
+    const names = fileList
+      .map((file) => (file?.name || '').replace(/\.cbz$/i, '').trim())
+      .filter(Boolean);
+
+    if (names.length > 0) {
+      const normalized = names
+        .map((name) => name
+          .replace(/[\s._-]*\(?\b(?:ch(?:apter)?|vol(?:ume)?|book|part|ep(?:isode)?|scene)\b\.?\s*\d.*$/i, '')
+          .replace(/[\s._-]*\d+(\.\d+)?\s*$/, '')
+          .trim()
+        )
+        .filter(Boolean);
+
+      if (normalized.length > 0) {
+        let prefix = normalized[0];
+        for (const name of normalized.slice(1)) {
+          let i = 0;
+          const max = Math.min(prefix.length, name.length);
+          while (i < max && prefix[i].toLowerCase() === name[i].toLowerCase()) i += 1;
+          prefix = prefix.slice(0, i).replace(/[\s._-]+$/, '').trim();
+          if (!prefix) break;
+        }
+
+        if (prefix.length >= 3) {
+          return prefix;
+        }
+      }
+
+      const firstName = names[0].replace(/[\s._-]*\d+(\.\d+)?\s*$/, '').trim();
+      if (firstName) return firstName;
+    }
+
     return `Collection ${fallbackIndex + 1}`;
   }
 
@@ -3080,10 +3106,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     hideCollectionMenu();
   });
 
-  if (readerBackBtn) {
-    readerBackBtn.addEventListener('click', () => showCollectionView());
-  }
-
   // ---- View switching ----
 
   function showGridView() {
@@ -3095,7 +3117,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     document.body.classList.remove('reader-mode');
     hideCollectionMenu();
     if (readingHud) readingHud.style.display = 'none';
-    if (readerBackBtn) readerBackBtn.classList.add('hidden');
     renderCollectionsGrid();
     applyReaderTheme();
     updateUI();
@@ -3128,7 +3149,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     syncChaptersFromActiveCollection();
     updateCollectionLabel();
     if (readingHud) readingHud.style.display = 'none';
-    if (readerBackBtn) readerBackBtn.classList.add('hidden');
     renderCollectionMenu();
     renderChapterCards();
     applyReaderTheme();
@@ -3146,7 +3166,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     document.getElementById('appHeader').classList.remove('hidden');
     document.body.classList.add('reader-mode');
     updateCollectionLabel();
-    if (readerBackBtn) readerBackBtn.classList.remove('hidden');
     applyReaderTheme();
     updateUI();
     history.pushState({ view: 'reader' }, '');
