@@ -3032,14 +3032,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           const total = result.files.length;
           updateUploadProgress(40, `Found ${total} chapter${total === 1 ? '' : 's'}…`);
 
-          // Convert each entry to a File-like object the rest of the code can use
+          // Convert each entry to a File object by reading bytes natively
           const makeFileObjects = async (entries, subfolder) => {
             const fileObjects = [];
             for (const entry of entries) {
               try {
-                // Fetch the file bytes via the content URI
-                const resp = await fetch(entry.uri);
-                const blob = await resp.blob();
+                const { data } = await NativePlugin.readFileAsBase64({ uri: entry.uri });
+                const binary = atob(data);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'application/zip' });
                 const file = new File([blob], entry.name, { type: 'application/zip' });
                 file.__capacitorPath = entry.path || entry.uri;
                 file.__capacitorName = entry.name;
@@ -3058,7 +3060,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
           if (!hasSubfolders) {
             // Single collection
-            const fileObjects = await makeFileObjects(result.files, null);
+            const fileObjects = [];
+            for (let i = 0; i < result.files.length; i++) {
+              const entry = result.files[i];
+              const pct = Math.round(40 + ((i + 1) / result.files.length) * 55);
+              updateUploadProgress(pct, `Reading ${i + 1} / ${result.files.length}…`);
+              const made = await makeFileObjects([entry], null);
+              fileObjects.push(...made);
+            }
             updateUploadProgress(100, `Ready — ${fileObjects.length} chapter${fileObjects.length === 1 ? '' : 's'}`);
             await new Promise(r => setTimeout(r, 80));
             hideUploadProgress();

@@ -206,6 +206,41 @@ public class MainActivity extends BridgeActivity {
 
         // ── Folder picker (SAF) ───────────────────────────────────────────────
 
+        @PluginMethod
+        public void readFileAsBase64(PluginCall call) {
+            String uriString = call.getString("uri");
+            if (uriString == null) {
+                call.reject("uri is required");
+                return;
+            }
+            try {
+                Uri uri = Uri.parse(uriString);
+                java.io.InputStream is = getActivity().getContentResolver().openInputStream(uri);
+                if (is == null) {
+                    call.reject("Could not open stream for uri");
+                    return;
+                }
+                byte[] bytes = readAllBytes(is);
+                is.close();
+                String base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+                JSObject ret = new JSObject();
+                ret.put("data", base64);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Failed to read file: " + e.getMessage());
+            }
+        }
+
+        private byte[] readAllBytes(java.io.InputStream is) throws java.io.IOException {
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[65536];
+            int n;
+            while ((n = is.read(chunk)) != -1) {
+                buffer.write(chunk, 0, n);
+            }
+            return buffer.toByteArray();
+        }
+
         private static final int PICK_FOLDER_REQUEST = 2002;
         private PluginCall pendingFolderCall;
 
