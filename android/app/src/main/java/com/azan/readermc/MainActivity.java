@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -18,6 +19,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.BridgeActivity;
 
 import androidx.activity.result.ActivityResult;
+import androidx.documentfile.provider.DocumentFile;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -199,6 +201,74 @@ public class MainActivity extends BridgeActivity {
 
             } catch (Exception e) {
                 call.reject("Failed to delete CBZ: " + e.getMessage());
+            }
+        }
+
+        // ── Folder picker (SAF) ───────────────────────────────────────────────
+
+        private static final int PICK_FOLDER_REQUEST = 2002;
+        private PluginCall pendingFolderCall;
+
+        @PluginMethod
+        public void pickFolder(PluginCall call) {
+            pendingFolderCall = call;
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            );
+            getActivity().startActivityForResult(intent, PICK_FOLDER_REQUEST);
+        }
+
+        @Override
+        protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
+            super.handleOnActivityResult(requestCode, resultCode, data);
+
+            if (requestCode != PICK_FOLDER_REQUEST || pendingFolderCall == null) return;
+
+            if (resultCode != Activity.RESULT_OK || data == null) {
+                pendingFolderCall.reject("CANCELLED");
+                pendingFolderCall = null;
+                return;
+            }
+
+            Uri treeUri = data.getData();
+            getActivity().getContentResolver().takePersistableUriPermission(
+                treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+            );
+
+            DocumentFile folder = DocumentFile.fromTreeUri(getActivity(), treeUri);
+            String folderName = (folder != null && folder.getName() != null)
+                ? folder.getName() : "My Manhwa";
+
+            JSArray filesArray = new JSArray();
+            if (folder != null) {
+                collectCbzFiles(folder, "", filesArray);
+            }
+
+            JSObject result = new JSObject();
+            result.put("folderName", folderName);
+            result.put("files", filesArray);
+            pendingFolderCall.resolve(result);
+            pendingFolderCall = null;
+        }
+
+        private void collectCbzFiles(DocumentFile dir, String relativePath, JSArray out) {
+            DocumentFile[] children = dir.listFiles();
+            if (children == null) return;
+            for (DocumentFile child : children) {
+                String name = child.getName() != null ? child.getName() : "";
+                if (child.isDirectory()) {
+                    String subPath = relativePath.isEmpty() ? name : relativePath + "/" + name;
+                    collectCbzFiles(child, subPath, out);
+                } else if (name.toLowerCase().endsWith(".cbz")) {
+                    JSObject f = new JSObject();
+                    f.put("name", name);
+                    f.put("uri", child.getUri().toString());
+                    f.put("relativePath", relativePath.isEmpty() ? name : relativePath + "/" + name);
+                    f.put("path", child.getUri().toString());
+                    out.put(f);
+                }
             }
         }
     }

@@ -1198,6 +1198,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     transition: background 0.15s ease;
   }
   .coll-card-cancel-btn:hover { background: rgba(255,255,255,0.2); }
+  .chapter-list-back-btn {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: none; border: none; color: var(--text);
+    font-size: 1rem; font-weight: 600;
+    padding: 0.75rem 1rem 0.5rem; cursor: pointer; width: auto;
+  }
+  .chapter-list-back-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+
   .reader-back-btn {
     background: var(--bg-tertiary);
     color: var(--text);
@@ -1720,6 +1728,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   <div id="collectionView" class="collection-view hidden">
     <div class="collection-topbar">
+      <button type="button" class="chapter-list-back-btn" id="chapterListBackBtn" aria-label="Back to library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
       <button type="button" class="collection-name-pill" id="collectionNamePill" title="Collection">
         <span id="collectionName">Collection</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1987,7 +1998,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   const collectionsGrid = document.getElementById('collectionsGrid');
   const collectionsGridEmpty = document.getElementById('collectionsGridEmpty');
   const addCollectionFab = document.getElementById('addCollectionFab');
-
+  const chapterListBackBtn = document.getElementById('chapterListBackBtn');
 
   let collections = [];
   let activeCollectionIndex = -1;
@@ -2891,11 +2902,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const hasSubfolders = bySubfolder.size > 1 || !bySubfolder.has('__root__');
 
     if (!hasSubfolders || bySubfolder.size <= 1) {
-      // Single collection
+      // Single collection — use the root folder name
+      const singleRootName = (allFiles[0]?.webkitRelativePath || '').split('/')[0] || null;
       updateUploadProgress(100, `Ready — ${total} chapter${total === 1 ? '' : 's'}`);
       await new Promise(r => setTimeout(r, 300));
       hideUploadProgress();
-      await handleSelectedFiles(fileList, {});
+      await handleSelectedFiles(fileList, singleRootName ? {
+        sourceType: 'folder',
+        name: singleRootName,
+        sourceKey: singleRootName.toLowerCase()
+      } : {});
     } else {
       // Multiple manhwas
       updateUploadProgress(100, `Found ${bySubfolder.size} manhwa${bySubfolder.size === 1 ? '' : 's'}`);
@@ -2966,17 +2982,132 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       hideUploadProgress();
 
-      const capacitorName = allFiles.length === 1
-        ? allFiles[0].name.replace(/\.cbz$/i, '').trim()
-        : (allFiles[0].name.replace(/\.cbz$/i, '').replace(/[\s_-]*\d+(\.\d+)?\s*$/, '').trim() || 'My Manhwa');
+      // Try to derive the folder name from the native file path
+      const rawPath = allFiles[0]?.__capacitorPath || allFiles[0]?.name || '';
+      const pathParts = rawPath.replace(/\\/g, '/').split('/');
+      // e.g. /storage/emulated/0/Manga/One Piece/ch1.cbz  → "One Piece"
+      const folderFromPath = pathParts.length >= 2
+        ? pathParts[pathParts.length - 2]
+        : null;
+      const capacitorName = folderFromPath && folderFromPath !== '0' && folderFromPath !== 'storage'
+        ? folderFromPath
+        : (allFiles.length === 1
+            ? allFiles[0].name.replace(/\.cbz$/i, '').trim()
+            : (allFiles[0].name.replace(/\.cbz$/i, '').replace(/[\s_-]*\d+(\.\d+)?\s*$/, '').trim() || 'My Manhwa'));
       await handleSelectedFiles(allFiles, { sourceType: 'files', name: capacitorName });
     });
   }
 
   async function addCollectionFromFolder() {
-    if (isCapacitor && capacitorFileInput) {
-      capacitorFileInput.click();
-      return;
+    if (isCapacitor) {
+      const NativePlugin = window.Capacitor?.Plugins?.NativePlugin;
+
+      // Try SAF folder picker first (gives us folder name + all CBZ files inside)
+      if (NativePlugin?.pickFolder) {
+        try {
+          showUploadProgress('Opening folder picker…');
+          updateUploadProgress(10, 'Waiting for folder selection…');
+
+          const result = await NativePlugin.pickFolder();
+          // result = { folderName: string, files: [{ name, path, uri }] }
+
+          if (!result || !result.files || result.files.length === 0) {
+            hideUploadProgress();
+            showToast('No CBZ files found in that folder', 'error');
+            return;
+          }
+
+          const folderName = result.folderName || 'My Manhwa';
+
+          // Group by immediate subfolder to support multi-manhwa folders
+          const bySubfolder = new Map();
+          for (const f of result.files) {
+            // path like: FolderName/SubManhwa/ch1.cbz  or  FolderName/ch1.cbz
+            const parts = (f.relativePath || f.name).split('/');
+            const subKey = parts.length >= 2 ? parts[0] : '__root__';
+            if (!bySubfolder.has(subKey)) bySubfolder.set(subKey, []);
+            bySubfolder.get(subKey).push(f);
+          }
+
+          const total = result.files.length;
+          updateUploadProgress(40, `Found ${total} chapter${total === 1 ? '' : 's'}…`);
+
+          // Convert each entry to a File-like object the rest of the code can use
+          const makeFileObjects = async (entries, subfolder) => {
+            const fileObjects = [];
+            for (const entry of entries) {
+              try {
+                // Fetch the file bytes via the content URI
+                const resp = await fetch(entry.uri);
+                const blob = await resp.blob();
+                const file = new File([blob], entry.name, { type: 'application/zip' });
+                file.__capacitorPath = entry.path || entry.uri;
+                file.__capacitorName = entry.name;
+                file.webkitRelativePath = subfolder
+                  ? `${folderName}/${subfolder}/${entry.name}`
+                  : `${folderName}/${entry.name}`;
+                fileObjects.push(file);
+              } catch (err) {
+                console.warn('Could not read file:', entry.name, err);
+              }
+            }
+            return fileObjects;
+          };
+
+          const hasSubfolders = bySubfolder.size > 1 || !bySubfolder.has('__root__');
+
+          if (!hasSubfolders) {
+            // Single collection
+            const fileObjects = await makeFileObjects(result.files, null);
+            updateUploadProgress(100, `Ready — ${fileObjects.length} chapter${fileObjects.length === 1 ? '' : 's'}`);
+            await new Promise(r => setTimeout(r, 80));
+            hideUploadProgress();
+            if (fileObjects.length === 0) { showToast('No CBZ files could be read', 'error'); return; }
+            await handleSelectedFiles(fileObjects, {
+              sourceType: 'folder',
+              name: folderName,
+              sourceKey: folderName.toLowerCase()
+            });
+          } else {
+            // Multiple sub-collections
+            let addedCount = 0;
+            let processed = 0;
+            for (const [subKey, entries] of bySubfolder) {
+              if (!entries.length) continue;
+              const subName = subKey === '__root__' ? folderName : subKey;
+              const fileObjects = await makeFileObjects(entries, subKey === '__root__' ? null : subKey);
+              processed += fileObjects.length;
+              updateUploadProgress(
+                Math.min(95, 40 + Math.round((processed / total) * 55)),
+                `Loading ${subName}…`
+              );
+              if (fileObjects.length === 0) continue;
+              await handleSelectedFiles(fileObjects, {
+                sourceType: 'folder',
+                name: subName,
+                sourceKey: `${folderName.toLowerCase()}/${subName.toLowerCase()}`
+              });
+              addedCount++;
+            }
+            updateUploadProgress(100, `Loaded ${addedCount} collection${addedCount === 1 ? '' : 's'}`);
+            await new Promise(r => setTimeout(r, 80));
+            hideUploadProgress();
+            showToast(`Loaded ${addedCount} manhwa collection${addedCount === 1 ? '' : 's'}`, 'success');
+          }
+          return;
+        } catch (err) {
+          hideUploadProgress();
+          if (err?.message?.includes('cancel') || err?.code === 'CANCELLED') return;
+          console.warn('NativePlugin.pickFolder failed, falling back to file picker:', err);
+          // fall through to capacitorFileInput below
+        }
+      }
+
+      // Fallback: individual file picker (existing behaviour)
+      if (capacitorFileInput) {
+        capacitorFileInput.click();
+        return;
+      }
     }
 
     if (typeof window.showDirectoryPicker === 'function') {
@@ -3071,6 +3202,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   if (addCollectionFab) {
     addCollectionFab.addEventListener('click', () => { void addCollectionFromFolder(); });
+  }
+
+  if (chapterListBackBtn) {
+    chapterListBackBtn.addEventListener('click', () => showGridView());
   }
 
   window.addEventListener('popstate', () => {
