@@ -1198,14 +1198,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     transition: background 0.15s ease;
   }
   .coll-card-cancel-btn:hover { background: rgba(255,255,255,0.2); }
-  .chapter-list-back-btn {
-    display: flex; align-items: center; gap: 0.5rem;
-    background: none; border: none; color: var(--text);
-    font-size: 1rem; font-weight: 600;
-    padding: 0.75rem 1rem 0.5rem; cursor: pointer; width: auto;
-  }
-  .chapter-list-back-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
-
   .reader-back-btn {
     background: var(--bg-tertiary);
     color: var(--text);
@@ -1728,9 +1720,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   <div id="collectionView" class="collection-view hidden">
     <div class="collection-topbar">
-      <button type="button" class="chapter-list-back-btn" id="chapterListBackBtn" aria-label="Back to library">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-      </button>
       <button type="button" class="collection-name-pill" id="collectionNamePill" title="Collection">
         <span id="collectionName">Collection</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1998,7 +1987,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   const collectionsGrid = document.getElementById('collectionsGrid');
   const collectionsGridEmpty = document.getElementById('collectionsGridEmpty');
   const addCollectionFab = document.getElementById('addCollectionFab');
-  const chapterListBackBtn = document.getElementById('chapterListBackBtn');
+
 
   let collections = [];
   let activeCollectionIndex = -1;
@@ -3082,10 +3071,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   if (addCollectionFab) {
     addCollectionFab.addEventListener('click', () => { void addCollectionFromFolder(); });
-  }
-
-  if (chapterListBackBtn) {
-    chapterListBackBtn.addEventListener('click', () => showGridView());
   }
 
   window.addEventListener('popstate', () => {
