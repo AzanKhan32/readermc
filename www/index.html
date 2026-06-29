@@ -1671,6 +1671,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       Manga Reader
     </div>
     <div class="controls">
+      <button class="reader-back-btn hidden" id="readerBackBtn" title="Back to chapters" aria-label="Back to chapters">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
       <select id="chapterSelect" disabled>
         <option value="">No chapters loaded</option>
       </select>
@@ -1728,9 +1733,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   <div id="collectionView" class="collection-view hidden">
     <div class="collection-topbar">
-      <button type="button" class="chapter-list-back-btn" id="chapterListBackBtn" aria-label="Back to library">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-      </button>
       <button type="button" class="collection-name-pill" id="collectionNamePill" title="Collection">
         <span id="collectionName">Collection</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1998,7 +2000,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   const collectionsGrid = document.getElementById('collectionsGrid');
   const collectionsGridEmpty = document.getElementById('collectionsGridEmpty');
   const addCollectionFab = document.getElementById('addCollectionFab');
-  const chapterListBackBtn = document.getElementById('chapterListBackBtn');
+  const readerBackBtn = document.getElementById('readerBackBtn');
 
   let collections = [];
   let activeCollectionIndex = -1;
@@ -2691,6 +2693,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (appHeader) {
       appHeader.classList.toggle('hidden', currentView !== 'reader');
     }
+    if (readerBackBtn) {
+      readerBackBtn.classList.toggle('hidden', currentView !== 'reader');
+    }
     chapterSelect.disabled = !hasChapters;
     prevBtn.disabled = !hasChapters || currentChapterIndex <= 0;
     nextBtn.disabled = !hasChapters || currentChapterIndex >= chapters.length - 1;
@@ -3205,8 +3210,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     addCollectionFab.addEventListener('click', () => { void addCollectionFromFolder(); });
   }
 
-  if (chapterListBackBtn) {
-    chapterListBackBtn.addEventListener('click', () => showGridView());
+  if (readerBackBtn) {
+    readerBackBtn.addEventListener('click', () => showCollectionView());
   }
 
   window.addEventListener('popstate', () => {

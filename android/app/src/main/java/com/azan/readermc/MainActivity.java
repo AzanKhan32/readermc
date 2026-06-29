@@ -274,25 +274,32 @@ public class MainActivity extends BridgeActivity {
                 android.util.Log.w("NativePlugin", "Could not persist permission: " + e.getMessage());
             }
 
-            DocumentFile folder = DocumentFile.fromTreeUri(getActivity(), treeUri);
-            if (folder == null) {
-                call.reject("Could not open folder");
-                return;
-            }
+            // Run on background thread so we don't block the UI
+            new Thread(() -> {
+                try {
+                    DocumentFile folder = DocumentFile.fromTreeUri(getActivity(), treeUri);
+                    if (folder == null) {
+                        call.reject("Could not open folder");
+                        return;
+                    }
 
-            String folderName = folder.getName() != null ? folder.getName() : "My Manhwa";
-            android.util.Log.d("NativePlugin", "Picked folder: " + folderName);
+                    String folderName = folder.getName() != null ? folder.getName() : "My Manhwa";
+                    android.util.Log.d("NativePlugin", "Picked folder: " + folderName);
 
-            // Read every CBZ file as base64 right here in Java
-            JSArray filesArray = new JSArray();
-            collectAndReadCbzFiles(folder, "", filesArray);
+                    JSArray filesArray = new JSArray();
+                    collectAndReadCbzFiles(folder, "", filesArray);
 
-            android.util.Log.d("NativePlugin", "Total CBZ files found and read: " + filesArray.length());
+                    android.util.Log.d("NativePlugin", "Total CBZ files read: " + filesArray.length());
 
-            JSObject ret = new JSObject();
-            ret.put("folderName", folderName);
-            ret.put("files", filesArray);
-            call.resolve(ret);
+                    JSObject ret = new JSObject();
+                    ret.put("folderName", folderName);
+                    ret.put("files", filesArray);
+                    call.resolve(ret);
+                } catch (Exception e) {
+                    android.util.Log.e("NativePlugin", "Error reading folder: " + e.getMessage());
+                    call.reject("Failed to read folder: " + e.getMessage());
+                }
+            }).start();
         }
 
         private void collectAndReadCbzFiles(DocumentFile dir, String relativePath, JSArray out) {
