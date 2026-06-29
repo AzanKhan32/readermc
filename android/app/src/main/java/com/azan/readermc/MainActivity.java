@@ -206,29 +206,29 @@ public class MainActivity extends BridgeActivity {
 
         // ── Folder picker (SAF) ───────────────────────────────────────────────
 
+        // Store URIs in memory — never pass file bytes in bulk through the bridge
+        private final java.util.HashMap<String, Uri> uriMap = new java.util.HashMap<>();
+
         @PluginMethod
         public void readFileAsBase64(PluginCall call) {
-            String uriString = call.getString("uri");
-            if (uriString == null) {
-                call.reject("uri is required");
-                return;
-            }
-            try {
-                Uri uri = Uri.parse(uriString);
-                java.io.InputStream is = getActivity().getContentResolver().openInputStream(uri);
-                if (is == null) {
-                    call.reject("Could not open stream for uri");
-                    return;
+            String key = call.getString("key");
+            if (key == null) { call.reject("key is required"); return; }
+            Uri uri = uriMap.get(key);
+            if (uri == null) { call.reject("Unknown key: " + key); return; }
+            new Thread(() -> {
+                try {
+                    java.io.InputStream is = getActivity().getContentResolver().openInputStream(uri);
+                    if (is == null) { call.reject("Could not open file"); return; }
+                    byte[] bytes = readAllBytes(is);
+                    is.close();
+                    String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+                    JSObject ret = new JSObject();
+                    ret.put("data", b64);
+                    call.resolve(ret);
+                } catch (Exception e) {
+                    call.reject("Read failed: " + e.getMessage());
                 }
-                byte[] bytes = readAllBytes(is);
-                is.close();
-                String base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
-                JSObject ret = new JSObject();
-                ret.put("data", base64);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to read file: " + e.getMessage());
-            }
+            }).start();
         }
 
         private byte[] readAllBytes(java.io.InputStream is) throws java.io.IOException {
@@ -254,90 +254,60 @@ public class MainActivity extends BridgeActivity {
         @ActivityCallback
         private void handleFolderPickerResult(PluginCall call, ActivityResult result) {
             if (call == null) return;
-
             if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
                 call.reject("CANCELLED");
                 return;
             }
-
             Uri treeUri = result.getData().getData();
-            if (treeUri == null) {
-                call.reject("No folder URI returned");
-                return;
-            }
+            if (treeUri == null) { call.reject("No folder URI returned"); return; }
 
             try {
                 getActivity().getContentResolver().takePersistableUriPermission(
-                    treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                );
+                    treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             } catch (Exception e) {
-                android.util.Log.w("NativePlugin", "Could not persist permission: " + e.getMessage());
+                android.util.Log.w("NativePlugin", "persist perm: " + e.getMessage());
             }
 
-            // Run on background thread so we don't block the UI
             new Thread(() -> {
                 try {
                     DocumentFile folder = DocumentFile.fromTreeUri(getActivity(), treeUri);
-                    if (folder == null) {
-                        call.reject("Could not open folder");
-                        return;
-                    }
-
+                    if (folder == null) { call.reject("Could not open folder"); return; }
                     String folderName = folder.getName() != null ? folder.getName() : "My Manhwa";
-                    android.util.Log.d("NativePlugin", "Picked folder: " + folderName);
 
+                    uriMap.clear();
                     JSArray filesArray = new JSArray();
-                    collectAndReadCbzFiles(folder, "", filesArray);
+                    collectFileMetadata(folder, "", filesArray);
 
-                    android.util.Log.d("NativePlugin", "Total CBZ files read: " + filesArray.length());
+                    android.util.Log.d("NativePlugin", "Found " + filesArray.length() + " CBZ in: " + folderName);
 
                     JSObject ret = new JSObject();
                     ret.put("folderName", folderName);
                     ret.put("files", filesArray);
                     call.resolve(ret);
                 } catch (Exception e) {
-                    android.util.Log.e("NativePlugin", "Error reading folder: " + e.getMessage());
-                    call.reject("Failed to read folder: " + e.getMessage());
+                    call.reject("Failed: " + e.getMessage());
                 }
             }).start();
         }
 
-        private void collectAndReadCbzFiles(DocumentFile dir, String relativePath, JSArray out) {
+        // Only collect name + key — NO file data
+        private void collectFileMetadata(DocumentFile dir, String relativePath, JSArray out) {
             DocumentFile[] children;
-            try {
-                children = dir.listFiles();
-            } catch (Exception e) {
-                android.util.Log.e("NativePlugin", "listFiles failed: " + e.getMessage());
-                return;
-            }
+            try { children = dir.listFiles(); } catch (Exception e) { return; }
             if (children == null) return;
-
             for (DocumentFile child : children) {
                 String name = child.getName() != null ? child.getName() : "";
                 if (child.isDirectory()) {
-                    String subPath = relativePath.isEmpty() ? name : relativePath + "/" + name;
-                    collectAndReadCbzFiles(child, subPath, out);
+                    String sub = relativePath.isEmpty() ? name : relativePath + "/" + name;
+                    collectFileMetadata(child, sub, out);
                 } else if (name.toLowerCase().endsWith(".cbz")) {
-                    try {
-                        android.util.Log.d("NativePlugin", "Reading: " + name);
-                        java.io.InputStream is = getActivity()
-                            .getContentResolver().openInputStream(child.getUri());
-                        if (is == null) continue;
-                        byte[] bytes = readAllBytes(is);
-                        is.close();
-                        String base64 = android.util.Base64.encodeToString(
-                            bytes, android.util.Base64.NO_WRAP);
-
-                        JSObject f = new JSObject();
-                        f.put("name", name);
-                        f.put("relativePath", relativePath.isEmpty()
-                            ? name : relativePath + "/" + name);
-                        f.put("data", base64);
-                        out.put(f);
-                        android.util.Log.d("NativePlugin", "Done: " + name + " (" + bytes.length + " bytes)");
-                    } catch (Exception e) {
-                        android.util.Log.e("NativePlugin", "Failed to read " + name + ": " + e.getMessage());
-                    }
+                    String key = relativePath.isEmpty() ? name : relativePath + "/" + name;
+                    uriMap.put(key, child.getUri());
+                    JSObject f = new JSObject();
+                    f.put("name", name);
+                    f.put("relativePath", key);
+                    f.put("key", key);
+                    out.put(f);
                 }
             }
         }
