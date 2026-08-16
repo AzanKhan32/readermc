@@ -1,4 +1,10 @@
+// Merged app/build.gradle for the Mihon-style extension system.
+// Replace android/app/build.gradle with this file's contents.
+// Changes from your original are marked with  // [ext] ...
+
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'                       // [ext] compiles the .kt files
+apply plugin: 'kotlinx-serialization'                // [ext] JSON models used by extensions
 
 android {
     namespace = "com.azan.readermc"
@@ -7,12 +13,10 @@ android {
         applicationId "com.azan.readermc"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
@@ -22,10 +26,35 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    // [ext] Kotlin + Java must both target the same JVM level. Capacitor's
+    // capacitor.build.gradle (applied at the bottom of this file) forces the
+    // Java compile options to 21, so Kotlin must match it.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+
+    // [ext] Some extension APKs and RxJava ship duplicate META-INF files that
+    // break packaging without these excludes. OkHttp 5's multi-release jars
+    // (okhttp-brotli + jspecify) also both ship
+    // META-INF/versions/9/OSGI-INF/MANIFEST.MF — pure build metadata, safe to
+    // drop entirely via the versions/** exclude.
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/LICENSE.txt',
+                         'META-INF/NOTICE', 'META-INF/NOTICE.txt', 'META-INF/*.kotlin_module',
+                         'META-INF/rxjava.properties',
+                         'META-INF/versions/**']
+        }
+    }
 }
 
 repositories {
-    flatDir{
+    flatDir {
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
@@ -41,6 +70,38 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // [ext] ── Tachiyomi/Mihon extension runtime ─────────────────────────────
+    // Kotlin stdlib + coroutines (extension code is all Kotlin/coroutines)
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.1.20" // matches the Kotlin plugin version
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
+    // OkHttp — the exact networking stack extensions compile against.
+    // Must be 5.x: Mihon/keiyoushi extensions call OkHttp 5 Kotlin APIs
+    // (e.g. CacheControl.Builder.maxStale(kotlin.time.Duration), mangled to
+    // maxStale-LRDsOJo). On 4.x those methods don't exist and extension
+    // installs fail with "No virtual method".
+    implementation platform("com.squareup.okhttp3:okhttp-bom:5.4.0")
+    implementation "com.squareup.okhttp3:okhttp"
+    implementation "com.squareup.okhttp3:okhttp-brotli"
+    // [ext] okhttp-zstd: extensions-lib 1.6 sources negotiate
+    // "Content-Encoding: zstd" and OkHttp loads okhttp3.zstd.Zstd reflectively.
+    // Without this artifact the request dies with
+    // "Failed resolution of: Lokhttp3/zstd/Zstd;". Same BOM version as okhttp.
+    implementation "com.squareup.okhttp3:okhttp-zstd"
+    // Jsoup — HTML parsing used by nearly every extension
+    implementation "org.jsoup:jsoup:1.17.2"
+    // RxJava 1 — legacy Observable API still used by many extensions
+    implementation "io.reactivex:rxjava:1.3.8"
+    // kotlinx-serialization — JSON parsing used by API-based extensions.
+    // MUST be >= 1.8.x: extensions built with Kotlin 2.x emit serializers that
+    // rely on the interface-default typeParametersSerializers(); on 1.6.3 that
+    // dispatch fails with AbstractMethodError (seen with the 4KHD source).
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.8.1"
+    // Injekt is NOT a dependency anymore: the JitPack artifact is dead, so an
+    // embedded copy of it ships in app/src/main/java/uy/kohesive/injekt/.
+    // AndroidX preference — ConfigurableSource extensions reference it
+    implementation "androidx.preference:preference-ktx:1.2.1"
 }
 
 apply from: 'capacitor.build.gradle'
@@ -51,5 +112,5 @@ try {
         apply plugin: 'com.google.gms.google-services'
     }
 } catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+    logger.info("google-services.json not found, push notifications won't work")
 }

@@ -1,5 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paths the FileProvider (${applicationId}.fileprovider) is allowed to hand out
+  as content:// URIs when SHARING a file to another app (e.g. "share CBZ",
+  "open image in...").
+
+  IMPORTANT: this does NOT control where manga downloads go. Downloads use the
+  Storage Access Framework (the folder you pick) + MediaStore.Downloads, which
+  are independent of this file. Narrowing these paths does not affect folder
+  creation or saving chapters.
+
+  Previously both entries used path="." which exposed the ENTIRE internal cache
+  and ENTIRE shared external storage. These scoped entries cover realistic
+  share/open needs without exposing the whole device storage.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <!-- App-private storage (always safe, no permission needed) -->
+    <files-path name="internal_files" path="." />
+    <cache-path name="internal_cache" path="." />
+    <external-files-path name="ext_files" path="." />
+    <external-cache-path name="ext_cache" path="." />
+
+    <!-- Public folders used when sharing a saved chapter/image out to another app -->
+    <external-path name="shared_downloads" path="Download/" />
+    <external-path name="shared_pictures" path="Pictures/" />
+    <external-path name="shared_documents" path="Documents/" />
 </paths>
