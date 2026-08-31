@@ -654,244 +654,12 @@
   };
 
 
-  // ==================== MANHWA READ SOURCE ====================
-  // manhwaread.com — custom site (NOT Madara). Ported from the real keiyoushi
-  // extension (eu.kanade.tachiyomi.extension.en.manhwaread.ManhwaRead):
-  //  • listing/search: {baseUrl}[/page/{n}/]?s={q}&sortby={v}&order=desc
-  //    items ".main-container .manga-item", link "a.manga-item__link",
-  //    thumb ".manga-item__img img". Popular = weekly_top, latest = release.
-  //  • details: "#mangaSummary" markup, status from ".manga-status"
-  //    data-status, cover from og:image.
-  //  • chapters: "#chaptersList > a.chapter-item" (site lists newest-first).
-  //  • pages: `var chapterData = {...}` inline script — its `data` field is
-  //    base64-encoded JSON [{src}], each image is `${base}/${src}`.
-  // The site sits behind Cloudflare, so every request routes through the
-  // hidden-WebView webFetch bridge (SourceNet), which passes the challenge.
-  const ManhwaReadSource = {
-    name: "Manhwa Read",
-    baseUrl: "https://manhwaread.com",
-
-    _headers() { return { Referer: `${this.baseUrl}/` }; },
-
-    _listUrl(page, query, sortby) {
-      const p = page > 1 ? `/page/${page}/` : '/';
-      const params = new URLSearchParams();
-      params.set('s', query || '');
-      if (sortby) { params.set('sortby', sortby); params.set('order', 'desc'); }
-      return `${this.baseUrl}${p}?${params.toString()}`;
-    },
-
-    _parseList(doc) {
-      const out = [];
-      const seen = new Set();
-      for (const it of doc.querySelectorAll('.main-container .manga-item')) {
-        const link = it.querySelector('a.manga-item__link');
-        if (!link) continue;
-        const url = SourceNet.abs(this.baseUrl, link.getAttribute('href'));
-        if (!url || seen.has(url)) continue;
-        seen.add(url);
-        const img = it.querySelector('.manga-item__img img');
-        out.push({
-          title: (link.textContent || '').trim(),
-          url,
-          thumbnail: img ? SourceNet.abs(this.baseUrl, SourceNet.imgSrc(img)) : '',
-        });
-      }
-      if (!out.length) console.warn('Manhwa Read: listing empty (check ".main-container .manga-item")');
-      return out;
-    },
-
-    async getPopularManga(page = 1) {
-      return this._parseList(await SourceNet.doc(this._listUrl(page, '', 'weekly_top'), this._headers()));
-    },
-
-    async getLatestUpdates(page = 1) {
-      return this._parseList(await SourceNet.doc(this._listUrl(page, '', 'release'), this._headers()));
-    },
-
-    async searchManga(query, page = 1) {
-      return this._parseList(await SourceNet.doc(this._listUrl(page, query, ''), this._headers()));
-    },
-
-    async getMangaDetails(mangaUrl) {
-      const doc = await SourceNet.doc(mangaUrl, this._headers());
-      const txt = (sel) => (doc.querySelector(sel)?.textContent || '').trim();
-      const title = txt('#mangaSummary .manga-titles h1') ||
-        (doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || '').trim();
-      const description = txt('#mangaDesc > .manga-desc__content') || txt('#mangaDesc') ||
-        (doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '').trim();
-      const thumbnail = SourceNet.abs(this.baseUrl,
-        doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '');
-      const genres = Array.from(doc.querySelectorAll('#mangaSummary .manga-genres a'))
-        .map(a => (a.textContent || '').trim()).filter(Boolean);
-      const statusText = doc.querySelector('#mangaSummary .manga-status')?.getAttribute('data-status') || '';
-      let status = 0;
-      if (statusText === 'ongoing') status = 1;
-      else if (statusText === 'completed') status = 2;
-      if (!title) console.warn('Manhwa Read: no title on details page', mangaUrl);
-      return { title, description, thumbnail, status, genres, author: '', artist: '' };
-    },
-
-    async getChapterList(mangaUrl) {
-      const doc = await SourceNet.doc(mangaUrl, this._headers());
-      const rows = Array.from(doc.querySelectorAll('#chaptersList > a.chapter-item, #chaptersList a.chapter-item'));
-      if (!rows.length) console.warn('Manhwa Read: no chapters (check "#chaptersList a.chapter-item")', mangaUrl);
-      // Site lists newest-first, which is what the app's chapter UI expects.
-      return rows.map(a => {
-        const name = (a.querySelector('span.chapter-item__name')?.textContent || a.textContent || '').trim();
-        const date = (a.querySelector('span.chapter-item__date')?.textContent || '').trim();
-        const numMatch = name.match(/([\d.]+)/);
-        return {
-          name: name || 'Chapter',
-          chapter: numMatch ? numMatch[1] : name,
-          date,
-          url: SourceNet.abs(this.baseUrl, a.getAttribute('href')),
-        };
-      });
-    },
-
-    // Pages come from an inline `var chapterData = {data, base}` where `data`
-    // is base64 JSON [{src}] — exactly what the real extension parses.
-    async getPages(chapterUrl) {
-      const html = await SourceNet.text(chapterUrl, this._headers());
-      const m = html.match(/var\s+chapterData\s*=\s*(\{.*?\})\s*[;\n]/s) ||
-        html.match(/var\s+chapterData\s*=\s*(\{.*\})/);
-      if (!m) {
-        console.error('Manhwa Read: chapterData not found in chapter page', chapterUrl);
-        throw new Error('Chapter data not found — the site may have changed.');
-      }
-      const chapterData = JSON.parse(m[1]);
-      const decoded = atob(chapterData.data);
-      const pages = JSON.parse(decoded);
-      return pages.map((p, i) => ({
-        url: `${chapterData.base}/${p.src}`,
-        index: i,
-      }));
-    },
-
-    async _fetchImageBase64(url) {
-      return SourceNet.imageBase64(url, this._headers());
-    },
-  };
-
-  // ==================== MANHWA BUDDY SOURCE ====================
-  // manhwabuddy.com — custom site (NOT Madara), selectors mapped from the live
-  // markup:
-  //  • latest: "/" and "/page/{n}/", items ".latest-item" with an
-  //    a[href^="/manhwa/"] link and "img.img-latest" cover.
-  //  • search: "/search/?s={q}" (same .latest-item results markup).
-  //  • details: h1 title, og:image cover, og:description, "/genre/" links.
-  //  • chapters: "ul.chapter-list li a" with span.chapter-name.
-  //  • pages: reader images "img.loading" with data-src on the
-  //    img01.manhwabuddy.com CDN (Referer required).
-  const ManhwaBuddySource = {
-    name: "Manhwa Buddy",
-    baseUrl: "https://manhwabuddy.com",
-
-    _headers() { return { Referer: `${this.baseUrl}/` }; },
-
-    _parseList(doc) {
-      const out = [];
-      const seen = new Set();
-      const items = doc.querySelectorAll('.latest-item, .item-move');
-      for (const it of items) {
-        const link = it.querySelector('a[href*="/manhwa/"]');
-        if (!link) continue;
-        const url = SourceNet.abs(this.baseUrl, link.getAttribute('href'));
-        if (!url || seen.has(url)) continue;
-        seen.add(url);
-        const img = it.querySelector('img');
-        const title = (link.getAttribute('title') || '').trim() ||
-          (it.querySelector('h4, .name')?.textContent || '').trim() ||
-          (img?.getAttribute('alt') || '').trim();
-        out.push({ title, url, thumbnail: img ? SourceNet.abs(this.baseUrl, SourceNet.imgSrc(img)) : '' });
-      }
-      if (!out.length) console.warn('Manhwa Buddy: listing empty (check ".latest-item")');
-      return out;
-    },
-
-    // No separate popularity listing with pagination, so popular reuses the
-    // homepage/latest feed — same content, keeps the Browse grid working.
-    async getPopularManga(page = 1) {
-      return this.getLatestUpdates(page);
-    },
-
-    async getLatestUpdates(page = 1) {
-      const url = page > 1 ? `${this.baseUrl}/page/${page}/` : `${this.baseUrl}/`;
-      return this._parseList(await SourceNet.doc(url, this._headers()));
-    },
-
-    async searchManga(query, page = 1) {
-      const params = new URLSearchParams();
-      params.set('s', query || '');
-      if (page > 1) params.set('page', String(page));
-      return this._parseList(await SourceNet.doc(`${this.baseUrl}/search/?${params.toString()}`, this._headers()));
-    },
-
-    async getMangaDetails(mangaUrl) {
-      const doc = await SourceNet.doc(mangaUrl, this._headers());
-      const meta = (p) => (doc.querySelector(`meta[property="${p}"]`)?.getAttribute('content') || '').trim();
-      const title = (doc.querySelector('h1')?.textContent || '').trim() || meta('og:title');
-      const description = meta('og:description');
-      const thumbnail = SourceNet.abs(this.baseUrl, meta('og:image'));
-      // Genre links inside the main info block (the site nav also has /genre/
-      // links, so scope to the content area first and fall back to page-wide).
-      let genreEls = doc.querySelectorAll('.main-info-list a[href*="/genre/"], .wpmone a[href*="/genre/"]');
-      if (!genreEls.length) genreEls = doc.querySelectorAll('.box a[href*="/genre/"]');
-      const genres = Array.from(genreEls).map(a => (a.textContent || '').trim()).filter(Boolean);
-      let status = 0;
-      const bodyText = (doc.querySelector('.main-info-list, .wpmone')?.textContent || '').toLowerCase();
-      if (bodyText.includes('ongoing')) status = 1;
-      else if (bodyText.includes('complet')) status = 2;
-      if (!title) console.warn('Manhwa Buddy: no title on details page', mangaUrl);
-      return { title, description, thumbnail, status, genres, author: '', artist: '' };
-    },
-
-    async getChapterList(mangaUrl) {
-      const doc = await SourceNet.doc(mangaUrl, this._headers());
-      const rows = Array.from(doc.querySelectorAll('ul.chapter-list li a, .chapter-list a'));
-      if (!rows.length) console.warn('Manhwa Buddy: no chapters (check "ul.chapter-list li a")', mangaUrl);
-      return rows.map(a => {
-        const name = (a.querySelector('.chapter-name')?.textContent || a.getAttribute('title') || a.textContent || '').trim();
-        const date = (a.querySelector('.ct-update')?.textContent || '').trim();
-        const numMatch = name.match(/([\d.]+)/);
-        return {
-          name: name || 'Chapter',
-          chapter: numMatch ? numMatch[1] : name,
-          date,
-          url: SourceNet.abs(this.baseUrl, a.getAttribute('href')),
-        };
-      });
-    },
-
-    async getPages(chapterUrl) {
-      const doc = await SourceNet.doc(chapterUrl, this._headers());
-      // Reader images are img.loading with data-src on the img01 CDN; exclude
-      // site chrome (logo, NEW badges) by requiring the chapters path.
-      let imgs = Array.from(doc.querySelectorAll('img.loading'));
-      if (!imgs.length) {
-        imgs = Array.from(doc.querySelectorAll('img[data-src*="/chapters/"], img[src*="/chapters/"]'));
-      }
-      const pages = imgs
-        .map(img => SourceNet.abs(this.baseUrl, SourceNet.imgSrc(img)))
-        .filter(src => src && /\/chapters\//.test(src))
-        .map((url, i) => ({ url, index: i }));
-      if (!pages.length) console.error('Manhwa Buddy: no page images found (check "img.loading")', chapterUrl);
-      return pages;
-    },
-
-    async _fetchImageBase64(url) {
-      return SourceNet.imageBase64(url, this._headers());
-    },
-  };
 
   // Registry the mdSearch fallback loader looks up by name
   // ==================== REGISTER ALL SOURCES ====================
    window.MangaSources = {
     AsuraScans: AsuraScansSource,
     MangaRead: MangaReadSource,
-    ManhwaRead: ManhwaReadSource,
-    ManhwaBuddy: ManhwaBuddySource,
   };
   // Source select handler — switching sources refreshes the Browse grid
   const sourceSelect = document.getElementById('sourceSelect');
@@ -998,4 +766,163 @@
       getCover: (sourceId, url) => callExt('extGetCover', { sourceId, url }),
       setHostAuth: (host, token = null) => callExt('extSetHostAuth', { host, token }),
     };
+  })();
+
+  // ==================== EXTENSION SOURCE REGISTRY ====================
+  // The missing publisher for the Browse tab. index.html listens for
+  // 'ext-sources-changed' (and reads window.ExtensionSources) to show
+  // installed extension sources in the source grid — but nothing ever
+  // dispatched it, so newly installed extensions never appeared until now.
+  // This module:
+  //   1. asks the native side for the installed-extension list,
+  //   2. registers each extension source into window.MangaSources under
+  //      key "ext:<sourceId>" with an adapter matching the dispatcher
+  //      contract the built-in scrapers implement, and
+  //   3. publishes window.ExtensionSources + fires 'ext-sources-changed'.
+  // It runs at startup and is re-run by the Extensions screen after every
+  // install/uninstall via window.ExtensionSourceRegistry.refresh().
+  (function extSourceRegistry() {
+    const api = () => window.ExtensionsAPI;
+
+    // Reader pages for extensions must be fetched natively with the FULL
+    // Tachiyomi Page object (index/url/imageUrl) so per-source headers and
+    // image-descrambling interceptors apply. But the reader and the CBZ
+    // downloader both fetch via _fetchImageBase64(page.url) with a single
+    // string — so getPages() encodes the whole page object into that string
+    // and _fetchImageBase64 decodes it back. Plain URLs (covers) still work:
+    // they route through getCover instead.
+    const PAGE_TOKEN = 'extpage:';
+
+    function makeAdapter(s) {
+      const sourceId = String(s.id);
+      const mapManga = (m) => ({
+        title: m.title || '',
+        thumbnail: m.thumbnailUrl || '',
+        url: m.url,
+      });
+      return {
+        name: s.name || 'Extension source',
+        lang: s.lang || 'all',
+        isNativeExtension: true,
+        // Extension covers routinely sit behind referer-protected CDNs; route
+        // them through the source's own native client like Hitomi covers.
+        coversNeedProxy: true,
+        extFilterStates: null,
+
+        async getPopularManga(page = 1) {
+          const res = await api().popular(sourceId, page);
+          return (res && res.mangas ? res.mangas : []).map(mapManga);
+        },
+
+        async getLatestUpdates(page = 1) {
+          const res = await api().latest(sourceId, page);
+          return (res && res.mangas ? res.mangas : []).map(mapManga);
+        },
+
+        async searchManga(query = '', page = 1) {
+          const filtersJson = this.extFilterStates
+            ? JSON.stringify(this.extFilterStates)
+            : null;
+          const res = await api().search(sourceId, query || '', page, filtersJson);
+          return (res && res.mangas ? res.mangas : []).map(mapManga);
+        },
+
+        // The extension's own FilterList schema (the Filters panel renders it).
+        async getExtFilters() {
+          const res = await api().filters(sourceId);
+          return Array.isArray(res) ? res : JSON.parse(res || '[]');
+        },
+
+        async getMangaDetails(mangaUrl) {
+          const d = await api().mangaDetails(sourceId, mangaUrl);
+          return {
+            title: d && d.title ? d.title : '',
+            author: (d && d.author) || '',
+            artist: (d && d.artist) || '',
+            description: (d && d.description) || '',
+            genres: d && d.genre
+              ? String(d.genre).split(',').map((g) => g.trim()).filter(Boolean)
+              : [],
+            status: d ? d.status : 0,
+            thumbnail: (d && d.thumbnailUrl) || '',
+            url: (d && d.url) || mangaUrl,
+          };
+        },
+
+        async getChapterList(mangaUrl) {
+          const res = await api().chapterList(sourceId, mangaUrl);
+          const list = Array.isArray(res) ? res : JSON.parse(res || '[]');
+          return list.map((c) => ({
+            name: c.name || '',
+            chapter: c.chapterNumber >= 0 ? String(c.chapterNumber) : (c.name || ''),
+            date: c.dateUpload ? new Date(c.dateUpload).toLocaleDateString() : '',
+            url: c.url,
+          }));
+        },
+
+        async getPages(chapterUrl) {
+          const res = await api().pageList(sourceId, chapterUrl);
+          const list = Array.isArray(res) ? res : JSON.parse(res || '[]');
+          return list.map((p, i) => ({
+            url: PAGE_TOKEN + JSON.stringify({
+              index: typeof p.index === 'number' ? p.index : i,
+              url: p.url || '',
+              imageUrl: p.imageUrl || '',
+            }),
+            index: i,
+          }));
+        },
+
+        async _fetchImageBase64(token) {
+          let res;
+          if (typeof token === 'string' && token.startsWith(PAGE_TOKEN)) {
+            const page = JSON.parse(token.slice(PAGE_TOKEN.length));
+            res = await api().getImage(sourceId, page);
+          } else {
+            res = await api().getCover(sourceId, String(token));
+          }
+          if (typeof res === 'string') res = JSON.parse(res);
+          return `${(res && res.mime) || 'image/jpeg'}|${res.data}`;
+        },
+      };
+    }
+
+    let registeredKeys = [];
+
+    function publish(installed) {
+      const list = Array.isArray(installed) ? installed : [];
+      // Drop sources from extensions that were uninstalled.
+      registeredKeys.forEach((k) => { delete window.MangaSources[k]; });
+      registeredKeys = [];
+      list.forEach((ext) => {
+        (ext.sources || []).forEach((s) => {
+          const key = 'ext:' + s.id;
+          window.MangaSources[key] = makeAdapter(s);
+          registeredKeys.push(key);
+        });
+      });
+      window.ExtensionSources = { installed: list };
+      window.dispatchEvent(new CustomEvent('ext-sources-changed', { detail: { installed: list } }));
+    }
+
+    async function refresh() {
+      if (!api() || !api().available) return;
+      try {
+        const res = await api().listInstalled();
+        publish(Array.isArray(res) ? res : JSON.parse(res || '[]'));
+      } catch (e) {
+        console.warn('Extension source refresh failed:', e && e.message ? e.message : e);
+      }
+    }
+
+    window.ExtensionSourceRegistry = { refresh, publish };
+
+    // Startup registration. The Capacitor bridge may not be ready at
+    // DOMContentLoaded on a cold start, so retry once shortly after.
+    function boot() { refresh(); setTimeout(refresh, 1500); }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot);
+    } else {
+      boot();
+    }
   })();
