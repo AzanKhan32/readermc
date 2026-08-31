@@ -2932,8 +2932,6 @@
                support now. (The adapter remains for previously saved manga.) -->
           <option value="AsuraScans">Asura Scans</option>
           <option value="MangaRead">Manga Read</option>
-          <option value="ManhwaRead">Manhwa Read</option>
-          <option value="ManhwaBuddy">Manhwa Buddy</option>
         </select>
         <button type="button" id="mdEditSourcesBtn" class="md-btn md-edit-sources-btn hidden" aria-label="Manage sources">Edit</button>
         <!-- The ✕ close button was removed: the bottom nav (Favorites/Browse
@@ -5353,6 +5351,15 @@
   }
 
   function updateReadingHud() {
+    // The reader's page containers stay in the (hidden) DOM after leaving
+    // the reader view, and this runs on every window scroll — so without
+    // this guard, scrolling the chapter list or library re-showed a stale
+    // reader HUD floating over the wrong screen.
+    if (currentView !== 'reader') {
+      if (readingHud) readingHud.style.display = 'none';
+      return;
+    }
+
     const pageContainers = Array.from(reader.querySelectorAll('.page-container'));
     const hasContent = pageContainers.length > 0;
 
@@ -5431,30 +5438,46 @@
   // compensating scroll adjustment below can't fight a gesture in progress.
   function evictFarSegments() {
     const behind = chapterSegments.filter(s => s.alive && s.index < currentChapterIndex - 1);
-    for (const seg of behind) {
-      const firstEl = seg.containerEls[0];
-      const lastEl = seg.transitionCardEl || seg.containerEls[seg.containerEls.length - 1];
-      if (!firstEl || !lastEl) continue;
-      const lastRect = lastEl.getBoundingClientRect();
-      if (lastRect.bottom > -window.innerHeight) continue; // still near the viewport — leave it
+    if (!behind.length) return;
+    // DOUBLE-COMPENSATION GUARD (same bug as the online reader's evictor):
+    // native scroll anchoring is deliberately left enabled so image loads
+    // don't shift the viewport, but it ALSO pins the viewport when the
+    // evicted chapter's DOM is removed above it — and the manual scrollTo
+    // compensation below then subtracted the removed height a SECOND time,
+    // throwing the reader back a full chapter right when eviction fired.
+    // Suspend anchoring for the removal so exactly one compensation applies.
+    const docEl = document.documentElement;
+    const prevAnchor = docEl.style.overflowAnchor;
+    docEl.style.overflowAnchor = 'none';
+    try {
+      for (const seg of behind) {
+        const firstEl = seg.containerEls[0];
+        const lastEl = seg.transitionCardEl || seg.containerEls[seg.containerEls.length - 1];
+        if (!firstEl || !lastEl) continue;
+        const lastRect = lastEl.getBoundingClientRect();
+        if (lastRect.bottom > -window.innerHeight) continue; // still near the viewport — leave it
 
-      const removedTop = firstEl.getBoundingClientRect().top + window.scrollY;
-      const removedBottom = lastRect.bottom + window.scrollY;
-      const removedHeight = removedBottom - removedTop;
+        const removedTop = firstEl.getBoundingClientRect().top + window.scrollY;
+        const removedBottom = lastRect.bottom + window.scrollY;
+        const removedHeight = removedBottom - removedTop;
+        const beforeScrollY = window.scrollY; // measure BEFORE the removal mutates layout
 
-      seg.alive = false;
-      if (seg.pages) {
-        for (const page of seg.pages) {
-          if (page?.url) URL.revokeObjectURL(page.url);
+        seg.alive = false;
+        if (seg.pages) {
+          for (const page of seg.pages) {
+            if (page?.url) URL.revokeObjectURL(page.url);
+          }
+        }
+        seg.containerEls.forEach(c => c.remove());
+        if (seg.transitionCardEl) seg.transitionCardEl.remove();
+        chapterSegments = chapterSegments.filter(s => s !== seg);
+
+        if (removedHeight > 0) {
+          window.scrollTo(window.scrollX, Math.max(0, beforeScrollY - removedHeight));
         }
       }
-      seg.containerEls.forEach(c => c.remove());
-      if (seg.transitionCardEl) seg.transitionCardEl.remove();
-      chapterSegments = chapterSegments.filter(s => s !== seg);
-
-      if (removedHeight > 0) {
-        window.scrollTo(window.scrollX, Math.max(0, window.scrollY - removedHeight));
-      }
+    } finally {
+      docEl.style.overflowAnchor = prevAnchor;
     }
   }
 
@@ -6781,7 +6804,7 @@
       }
     }
 
-    // ── Web / File System Access API path ────────────────────────────────
+    // ── Web / File System Access API path ──────────────────���─────────────
     const handle = await resolveCollectionDirectoryHandle(collection);
     if (!handle) return { deleted: false, reason: 'no_handle' };
 
@@ -6994,61 +7017,23 @@
     return f ? f.name.replace(/\.cbz$/i, '') : '';
   }
 
-  // Builds the "FINISHED Chapter N / NEXT CHAPTER N+1" divider and appends
-  // it right after a segment's last page. Tapping the next-chapter pill
-  // jumps straight there — loading it immediately if the observer hasn't
-  // fired yet — for readers who don't want to keep scrolling.
+  // Invisible sentinel appended right after a segment's last page. The
+  // visible "FINISHED / NEXT CHAPTER" divider UI was removed by request —
+  // chapters now flow seamlessly into each other — but the element itself
+  // must survive because the chapterAheadObserver watches it to trigger
+  // loading the next chapter, and eviction bookkeeping references it via
+  // segment.transitionCardEl.
   function appendTransitionCard(segment) {
     const nextIndex = segment.index + 1;
     const hasNext = nextIndex < chapters.length;
     const card = document.createElement('div');
     card.className = 'chapter-transition-card';
+    // 1px tall + invisible: zero visual footprint, but still a reliable
+    // IntersectionObserver target across all engines.
+    card.style.cssText = 'height:1px;padding:0;margin:0;border:0;background:none;visibility:hidden;';
     if (hasNext) {
-      card.innerHTML = `
-        <div class="chapter-transition-pill">
-          <div class="chapter-transition-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          <div class="chapter-transition-text">
-            <span class="chapter-transition-label">Finished</span>
-            <span class="chapter-transition-title"></span>
-          </div>
-        </div>
-        <div class="chapter-transition-divider">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
-        </div>
-        <div class="chapter-transition-pill next" role="button" tabindex="0">
-          <div class="chapter-transition-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-          <div class="chapter-transition-text">
-            <span class="chapter-transition-label">Next Chapter</span>
-            <span class="chapter-transition-title"></span>
-          </div>
-        </div>
-      `;
-      card.querySelectorAll('.chapter-transition-title')[0].textContent = chapterDisplayName(segment.index);
-      card.querySelectorAll('.chapter-transition-title')[1].textContent = chapterDisplayName(nextIndex);
       card.dataset.nextChapterIdx = String(nextIndex);
-      const nextPill = card.querySelector('.chapter-transition-pill.next');
-      const jump = () => goToChapterSegment(nextIndex);
-      nextPill.addEventListener('click', jump);
-      nextPill.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(); } });
       chapterAheadObserver.observe(card);
-    } else {
-      card.innerHTML = `
-        <div class="chapter-transition-pill">
-          <div class="chapter-transition-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          <div class="chapter-transition-text">
-            <span class="chapter-transition-label">Finished</span>
-            <span class="chapter-transition-title"></span>
-          </div>
-        </div>
-        <div class="chapter-transition-end">You&apos;re all caught up</div>
-      `;
-      card.querySelector('.chapter-transition-title').textContent = chapterDisplayName(segment.index);
     }
     reader.appendChild(card);
     segment.transitionCardEl = card;
@@ -7058,16 +7043,39 @@
   // continuous scroll. Loaded-and-adjacent → smooth scroll to it. Otherwise
   // append (or hard-load, if it's not adjacent to anything currently loaded)
   // and then scroll once its first page exists.
+  // Lands the window exactly on a segment's first page. A smooth
+  // scrollIntoView animates toward a position measured at call time, but
+  // 100vh image placeholders resolving mid-flight shift the layout so the
+  // animation lands short — back inside an already-read chapter. Jump
+  // instantly from a fresh measurement, then re-pin after layout settles
+  // (only while still parked near the target, so a user scroll is never
+  // yanked back).
+  function pinWindowToElement(el) {
+    if (!el) return;
+    const measure = () => el.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: measure(), behavior: 'auto' });
+    const repin = () => {
+      const target = measure();
+      const drift = Math.abs(window.scrollY - target);
+      if (drift > 2 && drift < window.innerHeight * 0.5) {
+        window.scrollTo({ top: target, behavior: 'auto' });
+      }
+      updateReadingHud();
+    };
+    requestAnimationFrame(repin);
+    setTimeout(repin, 350);
+  }
+
   async function goToChapterSegment(index) {
     const existing = chapterSegments.find(s => s.index === index && s.alive);
     if (existing && existing.containerEls[0]) {
-      existing.containerEls[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pinWindowToElement(existing.containerEls[0]);
       return;
     }
     const lastLoaded = chapterSegments[chapterSegments.length - 1];
     if (lastLoaded && index === lastLoaded.index + 1) {
       const seg = await appendChapterSegment(index);
-      if (seg && seg.containerEls[0]) seg.containerEls[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (seg && seg.containerEls[0]) pinWindowToElement(seg.containerEls[0]);
     } else {
       loadChapter(index, { force: true });
     }
@@ -7236,12 +7244,14 @@
       // Continuous look-ahead prefetch. The IntersectionObserver above only
       // reacts once a page nears the viewport, and native extraction is
       // per-page — so a fast flick could outrun it and land on a black,
-      // not-yet-extracted page. This driver keeps a sliding window of pages
-      // just past the current scroll position warm, using a small pool of
-      // concurrent workers, so the reader almost always has ready pages
-      // waiting ahead of it. extract() caches its promise, so this never
-      // double-decodes a page the observer already started.
-      const LOOKAHEAD = 8;          // pages to keep warm beyond the current one
+      // not-yet-extracted page. This driver warms EVERY remaining page of
+      // the chapter in order, using a small pool of concurrent workers, so
+      // once reading starts the whole chapter loads in the background.
+      // Memory stays bounded across a long read by chapter eviction
+      // (evictFarSegments), not by limiting the in-chapter window.
+      // extract() caches its promise, so this never double-decodes a page
+      // the observer already started.
+      const LOOKAHEAD = numPages;   // warm the whole chapter, front to back
       const PREFETCH_CONCURRENCY = 3;
       let prefetchCursor = 0;
       // Cached for 250ms: three workers polling this in a loop were forcing
@@ -8556,7 +8566,7 @@
     render();
   })();
 
-  // ���─ Download Location state ��────────────���────────────────���──────────────
+  // ���─ Download Location state ��────────────���────────────────�����──────────────
   // Lets the user pick a folder (via Android's Storage Access Framework)
   // where downloaded MangaDex chapters get saved, instead of the fixed
   // Downloads/MangaReader folder. Falls back to that default whenever no
@@ -9023,7 +9033,7 @@
     return 'downloaded';
   };
 
-  // ── Favorites import / export ─────────────────────────────────────────────
+  // ── Favorites import / export ──────────────────────────────��──────────────
   // Export writes the store to a JSON file (see window.saveTextFile for how
   // it's persisted per-platform); import reads one back and merges it.
   (function () {
@@ -9150,7 +9160,7 @@
     return { exportData, restore, BACKUP_VERSION };
   })();
 
-  // ══════════════════════════════════════════════════════════════════════
+  // ══════════════��═══════════════════════════════════════════════════════
   // MangaDex browser — search, pick a manga, pick chapters, download as CBZ
   // and add straight into the library via the existing handleSelectedFiles
   // pipeline (same code path as folder/file import).
@@ -10449,8 +10459,6 @@
     // The adapter code stays for previously saved/downloaded MangaDex manga.
     { key: 'AsuraScans',  name: 'Asura Scans',  color: '#d64545' },
     { key: 'MangaRead',   name: 'Manga Read',   color: '#2f9e5f' },
-    { key: 'ManhwaRead',  name: 'Manhwa Read',  color: '#16a3b8' },
-    { key: 'ManhwaBuddy', name: 'Manhwa Buddy', color: '#e0526d' },
     ];
 
     // ── Native extension sources (Mihon APKs) ──────────────────────────────
@@ -10768,6 +10776,12 @@
                 : await api().install(ext.repo, ext.pkg, ext.apk);
               const arr = Array.isArray(next) ? next : JSON.parse(next || '[]');
               installedByPkg = new Map(arr.map((e) => [e.pkg, e]));
+              // Publish the updated installed list to the Browse tab: this
+              // registers/unregisters the extension's sources in
+              // window.MangaSources and fires 'ext-sources-changed' so the
+              // source grid updates immediately (previously nothing did this,
+              // so new extensions never appeared until an app restart).
+              window.ExtensionSourceRegistry?.publish(arr);
               // Patch only this row — no renderList(), no scroll jump.
               btn.disabled = false;
               setBtn();
@@ -10825,7 +10839,7 @@
     let mdGlobalActive = false;
     let mdSourceGridRendered = false;
 
-    // ── Hidden / PIN-locked sources ────���────────────────────────────────────
+    // ── Hidden / PIN-locked sources ────���─────────────────────���──────────────
     // Users can hide sources from the grid + global search. Revealing/editing
     // the hidden set is protected by a numeric PIN (stored locally). MangaDex is
     // the built-in default and can't be hidden so the app always has one source.
@@ -11485,7 +11499,7 @@
     // just shows the date, instead of a fake/blank "0 pages".
     function mdBuildChapterRowHTML(chapterId, numberLabel, subtitle, metaParts) {
       const esc = (s) => String(s || '').replace(/</g, '&lt;');
-      const meta = (metaParts || []).filter(Boolean).map(esc).join(' <span>·</span> ');
+      const meta = (metaParts || []).filter(Boolean).map(esc).join(' <span>��</span> ');
       return `
         <div class="md-chapter-row" data-chapter-id="${chapterId}">
           <label class="md-chapter-checkbox">
@@ -12163,57 +12177,23 @@
       });
     }, { root: mdReaderPagesEl, rootMargin: '0px 0px 100% 0px', threshold: 0 });
 
+    // Invisible sentinel appended right after a segment's last page. The
+    // visible "FINISHED / NEXT CHAPTER" divider UI was removed by request —
+    // chapters now flow seamlessly into each other — but the element itself
+    // must survive because mdReaderAheadObserver watches it to trigger
+    // loading the next chapter, and eviction bookkeeping references it via
+    // segment.transitionCardEl.
     function mdAppendReaderTransitionCard(segment) {
       const nextListIndex = segment.chapterListIndex + mdReaderForwardStep();
       const hasNext = nextListIndex >= 0 && nextListIndex < mdCurrentChapters.length;
       const card = document.createElement('div');
       card.className = 'md-chapter-transition-card';
+      // 1px tall + invisible: zero visual footprint, but still a reliable
+      // IntersectionObserver target across all engines.
+      card.style.cssText = 'height:1px;padding:0;margin:0;border:0;background:none;visibility:hidden;';
       if (hasNext) {
-        card.innerHTML = `
-          <div class="chapter-transition-pill">
-            <div class="chapter-transition-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <div class="chapter-transition-text">
-              <span class="chapter-transition-label">Finished</span>
-              <span class="chapter-transition-title"></span>
-            </div>
-          </div>
-          <div class="chapter-transition-divider">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
-          </div>
-          <div class="chapter-transition-pill next" role="button" tabindex="0">
-            <div class="chapter-transition-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-            <div class="chapter-transition-text">
-              <span class="chapter-transition-label">Next Chapter</span>
-              <span class="chapter-transition-title"></span>
-            </div>
-          </div>
-        `;
-        card.querySelectorAll('.chapter-transition-title')[0].textContent = `Chapter ${mdReaderChapterLabel(segment.chapterListIndex)}`;
-        card.querySelectorAll('.chapter-transition-title')[1].textContent = `Chapter ${mdReaderChapterLabel(nextListIndex)}`;
         card.dataset.nextChapterIdx = String(nextListIndex);
-        const nextPill = card.querySelector('.chapter-transition-pill.next');
-        const jump = () => mdReaderGoToChapterSegment(nextListIndex);
-        nextPill.addEventListener('click', jump);
-        nextPill.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(); } });
         mdReaderAheadObserver.observe(card);
-      } else {
-        card.innerHTML = `
-          <div class="chapter-transition-pill">
-            <div class="chapter-transition-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <div class="chapter-transition-text">
-              <span class="chapter-transition-label">Finished</span>
-              <span class="chapter-transition-title"></span>
-            </div>
-          </div>
-          <div class="chapter-transition-end">You&apos;re all caught up</div>
-        `;
-        card.querySelector('.chapter-transition-title').textContent = `Chapter ${mdReaderChapterLabel(segment.chapterListIndex)}`;
       }
       mdReaderPagesEl.appendChild(card);
       segment.transitionCardEl = card;
@@ -12223,16 +12203,41 @@
     // scroll, may need appending (if adjacent to the last loaded segment),
     // or otherwise triggers a full fresh reader open (non-adjacent jump,
     // e.g. picking a chapter from the list while mid-read elsewhere).
+    // Lands the reader exactly on a segment's first page. scrollIntoView
+    // with behavior:'smooth' animated toward a position measured at call
+    // time, but 100vh image placeholders above/below resolve mid-flight and
+    // shift the layout, so the animation routinely ended short — parking the
+    // viewport back inside a chapter the user had already read. Jump
+    // instantly from a fresh measurement, then re-pin after layout settles
+    // (only while the reader is still parked near the target, so a user
+    // scroll is never yanked back).
+    function mdPinReaderToElement(el) {
+      if (!el) return;
+      const measure = () =>
+        el.getBoundingClientRect().top - mdReaderPagesEl.getBoundingClientRect().top + mdReaderPagesEl.scrollTop;
+      mdReaderPagesEl.scrollTop = measure();
+      const repin = () => {
+        const target = measure();
+        const drift = Math.abs(mdReaderPagesEl.scrollTop - target);
+        if (drift > 2 && drift < mdReaderPagesEl.clientHeight * 0.5) {
+          mdReaderPagesEl.scrollTop = target;
+        }
+        mdUpdateReaderHud();
+      };
+      requestAnimationFrame(repin);
+      setTimeout(repin, 350);
+    }
+
     function mdReaderGoToChapterSegment(listIndex) {
       const existing = mdReaderSegments.find(s => s.chapterListIndex === listIndex && s.alive);
       if (existing && existing.containerEls[0]) {
-        existing.containerEls[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        mdPinReaderToElement(existing.containerEls[0]);
         return;
       }
       const lastLoaded = mdReaderSegments[mdReaderSegments.length - 1];
       if (lastLoaded && listIndex === lastLoaded.chapterListIndex + mdReaderForwardStep()) {
         mdAppendChapterSegment(listIndex).then((seg) => {
-          if (seg && seg.containerEls[0]) seg.containerEls[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (seg && seg.containerEls[0]) mdPinReaderToElement(seg.containerEls[0]);
         });
       } else {
         const ch = mdCurrentChapters[listIndex];
@@ -12437,23 +12442,30 @@
     // same "whichever segment you're actually looking at wins" contract as
     // the offline reader's updateActiveChapterFromScroll.
     function mdUpdateReaderHud() {
-      if (!mdReadingHud || !mdHudChapter || !mdHudPage || !mdHudProgress) return;
       const pageContainers = Array.from(mdReaderPagesEl.querySelectorAll('.page-container'));
       if (!pageContainers.length) {
-        mdReadingHud.style.display = 'none';
+        if (mdReadingHud) mdReadingHud.style.display = 'none';
         return;
       }
 
       const scrollTop = mdReaderPagesEl.scrollTop;
       const viewportCenter = scrollTop + (mdReaderPagesEl.clientHeight / 2);
       const containerTop = mdReaderPagesEl.getBoundingClientRect().top;
-      let activeContainer = pageContainers[0];
+      // Same contract as the offline reader: the active page is the FIRST
+      // container whose bottom edge sits at/below the viewport center. The
+      // old "center inside this container" check matched NOTHING while the
+      // center was over a chapter transition card (a gap between chapters,
+      // not a page), so the loop fell through and picked the LAST loaded
+      // container — and because the next chapter preloads a full screen
+      // ahead, mdReaderChapterIndex flipped to the newest preloaded segment
+      // at every chapter boundary. That stale/wrong index is what made
+      // prev/next jump back to an already-read chapter and the HUD lag or
+      // skip around during continuous scroll.
+      let activeContainer = pageContainers[pageContainers.length - 1];
       for (let i = 0; i < pageContainers.length; i++) {
         const rect = pageContainers[i].getBoundingClientRect();
-        const top = rect.top - containerTop + scrollTop;
         const bottom = rect.bottom - containerTop + scrollTop;
-        activeContainer = pageContainers[i];
-        if (viewportCenter >= top && viewportCenter <= bottom) break;
+        if (viewportCenter <= bottom) { activeContainer = pageContainers[i]; break; }
       }
 
       const activeChapterIdx = Number(activeContainer.dataset.chapterIdx);
@@ -12470,6 +12482,10 @@
         mdScheduleReaderEviction();
       }
       mdReaderTotalPages = activeSegment ? activeSegment.totalPages : mdReaderTotalPages;
+
+      // HUD elements are only needed from here down — chapter tracking above
+      // must run even if the HUD is missing, or the index silently goes stale.
+      if (!mdReadingHud || !mdHudChapter || !mdHudPage || !mdHudProgress) return;
 
       const maxScroll = Math.max(1, mdReaderPagesEl.scrollHeight - mdReaderPagesEl.clientHeight);
       const progress = Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
@@ -12517,30 +12533,46 @@
     // never fights an in-progress scroll/fling.
     function mdEvictFarReaderSegments() {
       const behind = mdReaderSegments.filter(s => s.alive && s.chapterListIndex < mdReaderChapterIndex - 1);
-      for (const seg of behind) {
-        const firstEl = seg.containerEls[0];
-        const lastEl = seg.transitionCardEl || seg.containerEls[seg.containerEls.length - 1];
-        if (!firstEl || !lastEl) continue;
-        const rootRect = mdReaderPagesEl.getBoundingClientRect();
-        const lastRect = lastEl.getBoundingClientRect();
-        if (lastRect.bottom > rootRect.top - mdReaderPagesEl.clientHeight) continue; // still near the viewport — leave it
+      if (!behind.length) return;
+      // DOUBLE-COMPENSATION GUARD: the scroller keeps native scroll anchoring
+      // at its default (auto) so image loads don't shift the viewport. But
+      // anchoring ALSO pins the viewport when we remove an evicted chapter's
+      // DOM above it — and then the manual scrollTop compensation below
+      // subtracted the removed height a SECOND time, hurling the reader
+      // backwards by a full chapter the moment eviction fired (i.e. right
+      // when you reached chapter N+2). Suspend anchoring for the removal so
+      // exactly one (our deterministic) compensation applies, then restore.
+      const prevAnchor = mdReaderPagesEl.style.overflowAnchor;
+      mdReaderPagesEl.style.overflowAnchor = 'none';
+      try {
+        for (const seg of behind) {
+          const firstEl = seg.containerEls[0];
+          const lastEl = seg.transitionCardEl || seg.containerEls[seg.containerEls.length - 1];
+          if (!firstEl || !lastEl) continue;
+          const rootRect = mdReaderPagesEl.getBoundingClientRect();
+          const lastRect = lastEl.getBoundingClientRect();
+          if (lastRect.bottom > rootRect.top - mdReaderPagesEl.clientHeight) continue; // still near the viewport — leave it
 
-        const removedTop = firstEl.getBoundingClientRect().top;
-        const removedHeight = lastRect.bottom - removedTop;
+          const removedTop = firstEl.getBoundingClientRect().top;
+          const removedHeight = lastRect.bottom - removedTop;
+          const beforeScrollTop = mdReaderPagesEl.scrollTop; // measure BEFORE the removal mutates layout
 
-        seg.alive = false;
-        if (seg.pages) {
-          for (const page of seg.pages) {
-            if (page?.url) URL.revokeObjectURL(page.url);
+          seg.alive = false;
+          if (seg.pages) {
+            for (const page of seg.pages) {
+              if (page?.url) URL.revokeObjectURL(page.url);
+            }
+          }
+          seg.containerEls.forEach(c => c.remove());
+          if (seg.transitionCardEl) seg.transitionCardEl.remove();
+          mdReaderSegments = mdReaderSegments.filter(s => s !== seg);
+
+          if (removedHeight > 0) {
+            mdReaderPagesEl.scrollTop = Math.max(0, beforeScrollTop - removedHeight);
           }
         }
-        seg.containerEls.forEach(c => c.remove());
-        if (seg.transitionCardEl) seg.transitionCardEl.remove();
-        mdReaderSegments = mdReaderSegments.filter(s => s !== seg);
-
-        if (removedHeight > 0) {
-          mdReaderPagesEl.scrollTop = Math.max(0, mdReaderPagesEl.scrollTop - removedHeight);
-        }
+      } finally {
+        mdReaderPagesEl.style.overflowAnchor = prevAnchor;
       }
     }
 
@@ -12721,11 +12753,13 @@
           if (img) preloadObserver.observe(img);
         });
 
-        // Also quietly warm the next couple of pages right away in the
-        // background, so a slow connection still has a head start even
-        // before scroll-based preload kicks in.
+        // Quietly load EVERY remaining page of the chapter, one after
+        // another, in the background — so once the reader is on page 1
+        // the rest of the chapter keeps arriving without waiting for
+        // scroll-based preload. extract() caches its promise, so pages
+        // the IntersectionObserver already started are never re-fetched.
         (async () => {
-          for (let i = firstBatchCount; i < Math.min(firstBatchCount + 2, total); i++) {
+          for (let i = firstBatchCount; i < total; i++) {
             if (!segment.alive) return;
             try {
               await pages[i].extract();
@@ -12752,7 +12786,7 @@
     }
 
     // Simplified reader for non-MangaDex sources: no at-home server
-    // negotiation, no blob-retry pipeline ��� just resolve page image URLs
+    // negotiation, no blob-retry pipeline ���� just resolve page image URLs
     // and point <img> tags straight at them (page.id here is the chapter's
     // URL, per mdOpenOtherManga above).
     async function mdOpenOtherChapterReader(manga, ch, opts = {}) {
@@ -12923,16 +12957,27 @@
           }, { root: mdReaderPagesEl, rootMargin: '0px 0px 300% 0px', threshold: 0 });
           imgEls.forEach((img, i) => { if (i >= firstBatchCount) preloadObserver.observe(img); });
 
-          // Quietly warm a couple more pages right away in the background,
-          // so they're ready even before scroll-based preload kicks in.
+          // Quietly load EVERY remaining page one after another in the
+          // background, so the whole chapter is ready shortly after
+          // reading starts. Each page is awaited before starting the next
+          // so this never floods the connection or competes with the
+          // pages the reader is actually looking at.
           (async () => {
-            for (let i = firstBatchCount; i < Math.min(firstBatchCount + 2, pages.length); i++) {
+            for (let i = firstBatchCount; i < pages.length; i++) {
               if (isStale()) return;
               const img = imgEls[i];
-              if (img.dataset.src) {
-                mdSetPageSrcWhenLoaded(img, img.dataset.src);
-                delete img.dataset.src;
-              }
+              // Already given a src by the scroll-based preloader — skip.
+              if (!img.dataset.src) continue;
+              const url = img.dataset.src;
+              delete img.dataset.src;
+              mdSetPageSrcWhenLoaded(img, url);
+              // Wait for this page to finish (load OR fail) before the
+              // next one starts, keeping the background load sequential.
+              await new Promise((resolve) => {
+                if (img.complete && img.src) { resolve(); return; }
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true });
+              });
             }
           })();
         }
